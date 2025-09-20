@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getValidThemesDash } = require('../configs/themes');
 
 const projectSchema = new mongoose.Schema({
   title: {
@@ -12,23 +13,28 @@ const projectSchema = new mongoose.Schema({
     required: [true, 'Deskripsi project harus diisi'],
     maxlength: [2000, 'Deskripsi tidak boleh lebih dari 2000 karakter']
   },
-  category: {
+  
+  // Tema project untuk filtering (4 tema sesuai spesifikasi)
+  tema: {
     type: String,
-    required: [true, 'Kategori project harus dipilih'],
+    required: [true, 'Tema project harus dipilih'],
     enum: {
-      values: ['kesehatan', 'smart_city', 'pengelolaan_sampah', 'pendidikan', 'teknologi', 'lingkungan', 'ekonomi', 'sosial'],
-      message: 'Kategori tidak valid'
-    }
+      values: getValidThemesDash(),
+      message: `Tema harus salah satu dari: ${getValidThemesDash().join(', ')}`
+    },
+    index: true
   },
+  
+  // Status project
   status: {
     type: String,
-    enum: ['bisa_dilanjutkan', 'ditutup'],
-    default: 'bisa_dilanjutkan'
+    enum: ['active', 'completed', 'suspended', 'deactive'],
+    default: 'active'
   },
   academicYear: {
     type: String,
     required: [true, 'Tahun ajaran harus diisi'],
-    match: [/^\d{4}\/\d{4}$/, 'Format tahun ajaran harus YYYY/YYYY (contoh: 2024/2025)']
+    match: [/^(Gasal|Genap)-\d{4}$/, 'Format [Semester]-[Tahun] (Gasal-2025, Genap-2026)']
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
@@ -37,7 +43,7 @@ const projectSchema = new mongoose.Schema({
   },
   group: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Group',
+    ref: 'User',
     required: [true, 'Grup project harus ada']
   },
   documents: [{
@@ -53,18 +59,25 @@ const projectSchema = new mongoose.Schema({
     default: true
   }
 }, {
-  timestamps: true,
+  timestamps: {
+    currentTime: () => {
+      const now = new Date();
+      const jakartaOffset = 7 * 60; // UTC+7 in minutes
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      return new Date(utc + (jakartaOffset * 60000));
+    }
+  },
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
 
-// Index untuk optimasi query
 projectSchema.index({ category: 1, status: 1 });
+projectSchema.index({ capstoneType: 1, status: 1 });
+projectSchema.index({ category: 1, capstoneType: 1 });
 projectSchema.index({ academicYear: 1 });
 projectSchema.index({ owner: 1 });
 projectSchema.index({ title: 'text', description: 'text' });
 
-// Virtual untuk menghitung jumlah dokumen
 projectSchema.virtual('documentCount').get(function() {
   return this.documents ? this.documents.length : 0;
 });
@@ -74,16 +87,6 @@ projectSchema.pre('save', function(next) {
   if (this.isModified() && !this.isNew) {
     this.updatedAt = Date.now();
   }
-  next();
-});
-
-// Middleware untuk populate documents secara otomatis
-projectSchema.pre(/^find/, function(next) {
-  this.populate({
-    path: 'documents',
-    match: { isActive: true },
-    select: 'title filename fileSize mimeType createdAt'
-  });
   next();
 });
 
