@@ -1,7 +1,7 @@
 /**
  * File Validation Middleware for Base64 Storage
  * Menvalidasi file yang akan diupload dengan base64 storage
- * Mendukung capstone-specific document types dan size limits
+ * capstone-specific document types dan size limits
  */
 
 const validateCapstoneDocumentType = (req, res, next) => {
