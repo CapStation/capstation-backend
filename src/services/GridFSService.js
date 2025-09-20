@@ -3,8 +3,7 @@ const Grid = require('gridfs-stream');
 const { GridFSBucket } = require('mongodb');
 
 /**
- * GridFS Service for handling large files (videos, etc.)
- * Solves MongoDB 16MB document limit and Base64 corruption issues
+ * GridFS Service untuk handling videos and large files
  */
 class GridFSService {
   constructor() {
@@ -12,9 +11,6 @@ class GridFSService {
     this.initialized = false;
   }
 
-  /**
-   * Initialize GridFS bucket
-   */
   async initialize() {
     try {
       if (this.initialized) return;
@@ -24,15 +20,14 @@ class GridFSService {
         throw new Error('MongoDB connection not ready');
       }
 
-      // Create GridFS bucket for file storage
       this.bucket = new GridFSBucket(connection.db, {
         bucketName: 'capstation_files'
       });
 
       this.initialized = true;
-      console.log('✅ GridFS Service initialized');
+      console.log('GridFS Service initialized');
     } catch (error) {
-      console.error('❌ GridFS initialization failed:', error);
+      console.error('GridFS initialization failed:', error);
       throw error;
     }
   }
@@ -67,7 +62,6 @@ class GridFSService {
           resolve(uploadStream.id.toString());
         });
 
-        // Write buffer to GridFS
         uploadStream.end(fileBuffer);
       });
     } catch (error) {
@@ -86,7 +80,6 @@ class GridFSService {
 
       const objectId = new mongoose.Types.ObjectId(fileId);
 
-      // Get file metadata
       const fileInfo = await this.bucket.find({ _id: objectId }).toArray();
       if (!fileInfo || fileInfo.length === 0) {
         throw new Error('File not found in GridFS');
@@ -94,7 +87,6 @@ class GridFSService {
 
       const metadata = fileInfo[0];
 
-      // Download file as buffer
       return new Promise((resolve, reject) => {
         const chunks = [];
         const downloadStream = this.bucket.openDownloadStream(objectId);
@@ -142,17 +134,13 @@ class GridFSService {
   /**
    * Check if file is large enough to require GridFS
    * @param {Number} fileSize - File size in bytes
-   * @returns {Boolean} Whether to use GridFS
+   * @returns {Boolean} GridFS
    */
   shouldUseGridFS(fileSize) {
-    // Use GridFS for files > 10MB to avoid Base64 overhead
-    const GRIDFS_THRESHOLD = 10 * 1024 * 1024; // 10MB
+    const GRIDFS_THRESHOLD = 20 * 1024 * 1024; // 20MB
     return fileSize > GRIDFS_THRESHOLD;
   }
 
-  /**
-   * Get file statistics
-   */
   async getStatistics() {
     try {
       await this.initialize();
