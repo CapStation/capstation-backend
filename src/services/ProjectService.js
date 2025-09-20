@@ -1,11 +1,11 @@
 const Project = require('../models/Project');
-const User = require('../models/User');
-const Group = require('../models/Group');
+const User = require('../models/userModel'); // Use real auth system
+const { formatProjectForResponse } = require('../utils/responseFormatter');
+const { getValidThemes } = require('../configs/themes');
 
 /**
  * ProjectService Class
  * Mengelola operasi CRUD dan filtering untuk project capstone
- * Menggunakan Object-Oriented Programming approach
  */
 class ProjectService {
   constructor() {
@@ -20,40 +20,21 @@ class ProjectService {
    */
   async createProject(projectData, ownerId) {
     try {
-      // Validasi owner (skipped for testing)
-      // const owner = await User.findById(ownerId);
-      // if (!owner) {
-      //   throw new Error('Owner tidak ditemukan');
-      // }
+      // Validasi owner
+      const owner = await User.findById(ownerId);
+      if (!owner) {
+        throw new Error('Owner tidak ditemukan');
+      }
 
-      // if (!owner.isStudent) {
-      //   throw new Error('Hanya mahasiswa yang dapat membuat project');
-      // }
-
-      // Validasi grup owner (skipped for testing)
-      // const groups = await Group.findByUser(ownerId);
-      // if (groups.length === 0) {
-      //   throw new Error('User harus menjadi anggota grup untuk membuat project');
-      // }
-
-      // Ambil grup aktif pertama
-      // const activeGroup = groups[0];
-            // Mock user and group for testing
-      const ownerId = req.userId || '64a3f8b123456789abcdef00';
-      const groupId = req.groupId || '64a3f8b123456789abcdef01';
-
+      // Set group sama dengan owner ID
       const newProject = new this.model({
         ...projectData,
         owner: ownerId,
-        group: "507f1f77bcf86cd799439012" // Mock group ID for testing
+        group: ownerId  // Group ID sama dengan owner ID
       });
 
       const savedProject = await newProject.save();
       
-      // Update grup dengan project (skipped for testing)
-      // activeGroup.project = savedProject._id;
-      // await activeGroup.save();
-
       return await this.getProjectById(savedProject._id);
     } catch (error) {
       throw new Error(`Gagal membuat project: ${error.message}`);
@@ -84,11 +65,18 @@ class ProjectService {
         page = 1,
         limit = 10,
         capstoneType,   // Added missing field
-        category        // Added missing field
+        category,       // Added missing field
+        owner           // Added owner filter for my-projects
       } = filters;
 
-      // Build query object
       const query = { isActive: true };
+
+      // Filter berdasarkan owner (untuk my-projects)
+      if (owner) {
+        query.owner = owner;
+        console.log('🔍 Filtering by owner:', owner);
+        console.log('🔍 Query object:', JSON.stringify(query, null, 2));
+      }
 
       // Filter berdasarkan tema project
       if (tema) {
@@ -124,7 +112,9 @@ class ProjectService {
       const skip = (page - 1) * limit;
       
       try {
+        console.log('🔍 Final query:', JSON.stringify(query, null, 2));
         const projects = await this.model.find(query).limit(parseInt(limit));
+        console.log('📊 Found projects:', projects.length);
         
         return {
           projects,
@@ -143,9 +133,8 @@ class ProjectService {
       }
 
       // Count total documents  
-      console.log('🔢 Counting total documents...');
       const total = await this.model.countDocuments(query);
-      console.log(`📊 Total projects: ${total}`);
+      console.log(`Total projects: ${total}`);
       const totalPages = Math.ceil(total / limit);
 
       return {
@@ -190,19 +179,7 @@ class ProjectService {
    */
   async getProjectsByCategory(category, options = {}) {
     try {
-      const validCategories = [
-        'kesehatan', 
-        'smart_city', 
-        'pengelolaan_sampah', 
-        'pendidikan', 
-        'teknologi_informasi',
-        'rekayasa_perangkat_lunak',
-        'sistem_informasi',
-        'keamanan_siber',
-        'lingkungan', 
-        'ekonomi', 
-        'sosial'
-      ];
+      const validCategories = getValidThemes();
 
       if (!validCategories.includes(category)) {
         throw new Error('Kategori tidak valid');
@@ -318,21 +295,16 @@ class ProjectService {
     try {
       const project = await this.model
         .findById(projectId)
-        .populate('owner', 'firstName lastName email studentId department')
-        .populate({
-          path: 'group',
-          populate: {
-            path: 'members.user advisor',
-            select: 'firstName lastName email studentId employeeId'
-          }
-        })
+        .populate('owner', 'name email')
+        .populate('group', 'name email')
         .populate('documents');
 
       if (!project) {
         throw new Error('Project tidak ditemukan');
       }
 
-      return project;
+      // Format response untuk mempersingkat fileData
+      return formatProjectForResponse(project);
     } catch (error) {
       throw new Error(`Gagal mengambil detail project: ${error.message}`);
     }
@@ -347,14 +319,21 @@ class ProjectService {
    */
   async updateProject(projectId, updateData, userId) {
     try {
+      console.log('🔍 ProjectService updateProject:', { projectId, updateData, userId });
+
       const project = await this.model.findById(projectId);
       if (!project) {
         throw new Error('Project tidak ditemukan');
       }
 
-      // Hanya owner yang bisa update
-      if (project.owner.toString() !== userId.toString()) {
-        throw new Error('Hanya owner project yang dapat melakukan update');
+      // Permission check with null safety
+      if (project.owner && project.owner.toString() !== userId.toString()) {
+        // Check if user is admin or dosen (using real auth system)
+        const user = await User.findById(userId);
+        if (!user || (user.role !== 'admin' && user.role !== 'dosen')) {
+          throw new Error('Tidak memiliki izin untuk mengupdate project ini');
+        }
+        console.log('✅ Admin/Dosen access granted for project update');
       }
 
       // Update project
@@ -363,6 +342,7 @@ class ProjectService {
 
       return await this.getProjectById(updatedProject._id);
     } catch (error) {
+      console.error('❌ ProjectService updateProject error:', error);
       throw new Error(`Gagal update project: ${error.message}`);
     }
   }
@@ -431,7 +411,8 @@ class ProjectService {
 
       const projects = await this.model
         .find(query)
-        .populate('group', 'name members')
+        .populate('owner', 'name email')
+        .populate('group', 'name email')
         .populate('documents', 'title filename fileSize mimeType createdAt')
         .sort({ createdAt: -1 });
 
@@ -573,8 +554,8 @@ class ProjectService {
 
       const projects = await this.model
         .find(query)
-        .populate('owner', 'firstName lastName email studentId')
-        .populate('group', 'name members')
+        .populate('owner', 'name email')
+        .populate('group', 'name email')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit));

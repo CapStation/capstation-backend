@@ -1,4 +1,5 @@
 const ProjectService = require('../services/ProjectService');
+const { getValidThemes, getThemeCategories } = require('../configs/themes');
 
 /**
  * ProjectController Class
@@ -17,7 +18,16 @@ class ProjectController {
   async createProject(req, res) {
     try {
       const projectData = req.body;
-      const userId = req.user.id; // Dari middleware authentication
+      // Get user ID from auth middleware (real auth system)
+      const userId = req.user?._id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User tidak terautentikasi',
+          data: null
+        });
+      }
 
       const newProject = await this.projectService.createProject(projectData, userId);
 
@@ -27,6 +37,7 @@ class ProjectController {
         data: newProject
       });
     } catch (error) {
+      console.error('Create Project Error:', error);
       res.status(400).json({
         success: false,
         message: error.message,
@@ -36,33 +47,96 @@ class ProjectController {
   }
 
   /**
-   * Get all projects with filtering (including capstone filtering)
+   * Get all projects
    * GET /api/projects
    */
   async getAllProjects(req, res) {
     try {
-      // Simple test response without database query
+      console.log('🚀 ProjectController.getAllProjects called');
+      console.log('📦 Query params:', req.query);
+
+      const filters = {
+        tema: req.query.tema,              
+        status: req.query.status,
+        academicYear: req.query.academicYear,
+        search: req.query.search,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 10
+      };
+      const result = await this.projectService.getProjectsByFilter(filters);
+
       res.status(200).json({
         success: true,
-        message: 'Projects endpoint working',
-        data: [
-          {
-            _id: "507f1f77bcf86cd799439011",
-            title: "Test Project Capstone 1",
-            capstoneType: "capstone1",
-            status: "active"
-          }
-        ],
-        pagination: {
-          page: 1,
-          limit: 10,
-          total: 1,
-          pages: 1,
-          hasNext: false,
-          hasPrev: false
+        message: 'Data project berhasil diambil',
+        data: result.projects,
+        pagination: result.pagination,
+        filters: {
+          applied: filters,
+          available_themes: getValidThemes()
         }
       });
     } catch (error) {
+      console.error('Error getAllProjects:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message,
+        data: null
+      });
+    }
+  }
+
+  /**
+   * Get my projects (projects owned by the authenticated user)
+   * GET /api/projects/my-projects
+   */
+  async getMyProjects(req, res) {
+    try {
+      console.log('🚀 ProjectController.getMyProjects called');
+      console.log('🔐 User from auth middleware:', req.user);
+      
+      // Get user ID from auth middleware
+      const userId = req.user?._id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User tidak terautentikasi',
+          data: null
+        });
+      }
+
+      console.log('🔍 Getting projects for user ID:', userId);
+
+      // Query filters
+      const filters = {
+        owner: userId, // Filter by owner (user ID)
+        tema: req.query.tema,
+        status: req.query.status,
+        academicYear: req.query.academicYear,
+        search: req.query.search,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 10
+      };
+
+      const result = await this.projectService.getProjectsByFilter(filters);
+
+      console.log('📊 My projects result:', {
+        totalProjects: result.projects.length,
+        pagination: result.pagination
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Project Anda berhasil diambil',
+        data: result.projects,
+        pagination: result.pagination,
+        filters: {
+          applied: filters,
+          available_themes: getValidThemes()
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error getMyProjects:', error);
       res.status(500).json({
         success: false,
         message: error.message,
@@ -163,7 +237,23 @@ class ProjectController {
     try {
       const { id } = req.params;
       const updateData = req.body;
-      const userId = req.user.id;
+      // Get user ID from auth middleware (real auth system)
+      const userId = req.user?._id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User tidak terautentikasi',
+          data: null
+        });
+      }
+
+      console.log('🔄 Update project request:', {
+        projectId: id,
+        updateData,
+        userId,
+        hasReqUser: !!req.user
+      });
 
       const updatedProject = await this.projectService.updateProject(id, updateData, userId);
 
@@ -173,6 +263,7 @@ class ProjectController {
         data: updatedProject
       });
     } catch (error) {
+      console.error('❌ Update project error:', error.message);
       res.status(400).json({
         success: false,
         message: error.message,
@@ -189,7 +280,23 @@ class ProjectController {
     try {
       const { id } = req.params;
       const { status } = req.body;
-      const userId = req.user.id;
+      // Get user ID from auth middleware (real auth system)
+      const userId = req.user?._id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User tidak terautentikasi',
+          data: null
+        });
+      }
+
+      console.log('🔄 Update project status request:', {
+        projectId: id,
+        status,
+        userId,
+        hasReqUser: !!req.user
+      });
 
       const updatedProject = await this.projectService.updateProjectStatus(id, status, userId);
 
@@ -199,6 +306,7 @@ class ProjectController {
         data: updatedProject
       });
     } catch (error) {
+      console.error('❌ Update project status error:', error.message);
       res.status(400).json({
         success: false,
         message: error.message,
@@ -313,16 +421,7 @@ class ProjectController {
    */
   async getCategories(req, res) {
     try {
-      const categories = [
-        { value: 'kesehatan', label: 'Kesehatan' },
-        { value: 'smart_city', label: 'Smart City' },
-        { value: 'pengelolaan_sampah', label: 'Pengelolaan Sampah' },
-        { value: 'pendidikan', label: 'Pendidikan' },
-        { value: 'teknologi', label: 'Teknologi' },
-        { value: 'lingkungan', label: 'Lingkungan' },
-        { value: 'ekonomi', label: 'Ekonomi' },
-        { value: 'sosial', label: 'Sosial' }
-      ];
+      const categories = getThemeCategories();
 
       res.status(200).json({
         success: true,
@@ -435,6 +534,76 @@ class ProjectController {
     }
   }
 
+
+
+  /**
+   * Get projects by tema
+   * GET /api/projects/tema/:tema
+   */
+  async getProjectsByTema(req, res) {
+    try {
+      const { tema } = req.params;
+      const { page = 1, limit = 10 } = req.query;
+
+      const result = await this.projectService.getProjectsByTema(tema, {
+        page: parseInt(page),
+        limit: parseInt(limit)
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Projects with tema '${tema}' retrieved successfully`,
+        data: result.projects,
+        pagination: result.pagination
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: 'Failed to get projects by tema',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get project documents with filtering
+   * GET /api/projects/:id/documents
+   */
+  async getProjectDocuments(req, res) {
+    try {
+      const { id } = req.params;
+      const { capstoneCategory, documentType, page = 1, limit = 10 } = req.query;
+
+      const filters = {
+        project: id  // Filter by project ID
+      };
+      if (capstoneCategory) filters.capstoneCategory = capstoneCategory;
+      if (documentType) filters.documentType = documentType;
+
+      // Use DocumentService since this is document-related operation
+      const DocumentService = require('../services/DocumentService');
+      const documentService = new DocumentService();
+      
+      const result = await documentService.getDocumentsByFilters(filters, {
+        page: parseInt(page),
+        limit: parseInt(limit)
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Project documents retrieved successfully',
+        data: result.documents,
+        pagination: result.pagination
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: 'Failed to get project documents',
+        error: error.message
+      });
+    }
+  }
+
   /**
    * Bind methods to preserve 'this' context
    */
@@ -455,7 +624,73 @@ class ProjectController {
     this.getCapstone2Projects = this.getCapstone2Projects.bind(this);
     this.getProjectsByCapstoneType = this.getProjectsByCapstoneType.bind(this);
     
+    // theme based
+    this.getAvailableTemas = this.getAvailableTemas.bind(this);
+    this.getProjectsByTema = this.getProjectsByTema.bind(this);
+    this.getProjectDocuments = this.getProjectDocuments.bind(this);
+    
     return this;
+  }
+
+  /**
+   * Get available themes
+   * GET /api/projects/temas
+   */
+  async getAvailableTemas(req, res) {
+    try {
+      const themes = getValidThemes();
+
+      res.status(200).json({
+        success: true,
+        message: 'Tema tersedia berhasil diambil',
+        data: {
+          themes: themes,
+          total: themes.length
+        }
+      });
+    } catch (error) {
+      console.error('Get Themes Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengambil tema tersedia',
+        data: null
+      });
+    }
+  }
+
+  /**
+   * Get my projects - projects owned by authenticated user
+   * GET /api/projects/my-projects
+   */
+  async getMyProjects(req, res) {
+    try {
+      console.log('🔍 getMyProjects called');
+      console.log('🔍 User from auth:', req.user);
+      
+      const userId = req.user.id;
+      console.log('🔍 Filtering projects by userId:', userId);
+      
+      const result = await this.projectService.getProjectsByFilter({
+        owner: userId,
+        page: 1,
+        limit: 100
+      });
+
+      console.log('🔍 Projects found for user:', result.projects.length);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Project Anda berhasil diambil',
+        data: result.projects
+      });
+    } catch (error) {
+      console.error('Get My Projects Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengambil project Anda',
+        data: null
+      });
+    }
   }
 }
 
