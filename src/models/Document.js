@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 const path = require('path');
+const FileValidationManager = require('../utils/FileValidationManager');
 
 const documentSchema = new mongoose.Schema({
   title: {
     type: String,
     required: [true, 'Judul dokumen harus diisi'],
     trim: true,
+    minlength: [3, 'Judul dokumen minimal 3 karakter'],
     maxlength: [200, 'Judul dokumen tidak boleh lebih dari 200 karakter']
   },
   description: {
@@ -13,47 +15,96 @@ const documentSchema = new mongoose.Schema({
     trim: true,
     maxlength: [1000, 'Deskripsi tidak boleh lebih dari 1000 karakter']
   },
-  filename: {
-    type: String,
-    required: [true, 'Filename harus ada']
-  },
+  
+  // File information with centralized validation
   originalName: {
     type: String,
-    required: [true, 'Nama file asli harus ada']
-  },
-  filePath: {
-    type: String,
-    required: [true, 'Path file harus ada']
+    required: [true, 'Nama file asli harus ada'],
+    maxlength: [255, 'Nama file terlalu panjang']
   },
   fileSize: {
     type: Number,
     required: [true, 'Ukuran file harus ada'],
-    max: [10485760, 'Ukuran file tidak boleh lebih dari 10MB'] // 10MB in bytes
+    min: [1, 'File tidak boleh kosong']
   },
   mimeType: {
     type: String,
     required: [true, 'Tipe file harus ada']
   },
   fileExtension: {
-    type: String
+    type: String,
+    required: [true, 'Ekstensi file harus ada']
   },
+  
+  // Base64 storage
+  fileData: {
+    type: String,
+    required: [true, 'Data file base64 harus ada']
+  },
+  
+  // Capstone category
+  capstoneCategory: {
+    type: String,
+    required: [true, 'Kategori capstone harus diisi'],
+    enum: {
+      values: ['capstone1', 'capstone2', 'general'],
+      message: 'Kategori capstone harus capstone1, capstone2, atau general'
+    }
+  },
+  
+  // Document type
+  documentType: {
+    type: String,
+    required: [true, 'Tipe dokumen harus diisi']
+  },
+  
+  // Project reference - tema is handled at project level
   project: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project',
-    required: [true, 'Project harus ada']
+    ref: 'Project'
   },
+  
+  // Author info
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Uploader harus ada']
+    required: [true, 'User yang upload harus ada']
   },
-  downloadCount: {
-    type: Number,
-    default: 0
+  
+  // File hash for integrity
+  fileHash: {
+    type: String,
+    required: [true, 'Hash file harus ada']
+  },
+  
+  // Metadata
+  isPublic: {
+    type: Boolean,
+    default: true  // Semua dokumen public agar mahasiswa bisa saling melihat
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  tags: [{
+    type: String,
+    trim: true,
+    maxlength: [50, 'Tag terlalu panjang']
+  }],
+  downloadCount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Download count tidak boleh negatif']
+  },
+  version: {
+    type: String,
+    default: '1.0'
+  },
+  compressionLevel: {
+    type: Number,
+    default: 0,
+    min: [0, 'Compression level tidak boleh negatif'],
+    max: [9, 'Compression level maksimal 9']
   }
 }, {
   timestamps: true,
@@ -61,46 +112,46 @@ const documentSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Index untuk optimasi query
-documentSchema.index({ project: 1, createdAt: -1 });
-documentSchema.index({ uploadedBy: 1 });
-documentSchema.index({ mimeType: 1 });
-
-// Virtual untuk format ukuran file
-documentSchema.virtual('fileSizeFormatted').get(function() {
-  const bytes = this.fileSize;
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-});
-
-// Virtual untuk mendapatkan URL download
-documentSchema.virtual('downloadUrl').get(function() {
-  return `/api/documents/download/${this._id}`;
-});
-
-// Middleware untuk set file extension
+// Pre-save validation using FileValidationManager
 documentSchema.pre('save', function(next) {
-  if (this.originalName) {
-    this.fileExtension = path.extname(this.originalName).toLowerCase();
+  try {
+    // Validate file info using centralized manager
+    const fileInfo = {
+      originalName: this.originalName,
+      size: this.fileSize,
+      mimeType: this.mimeType,
+      documentType: this.documentType
+    };
+
+    const validation = FileValidationManager.validateFile(fileInfo);
+    
+    if (!validation.isValid) {
+      const error = new Error(validation.error);
+      error.name = 'ValidationError';
+      return next(error);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
 
-// Middleware untuk hapus file dari filesystem ketika document dihapus
-documentSchema.pre('deleteOne', { document: true, query: false }, function(next) {
-  const fs = require('fs');
-  if (fs.existsSync(this.filePath)) {
-    try {
-      fs.unlinkSync(this.filePath);
-      console.log(`File ${this.filename} berhasil dihapus dari filesystem`);
-    } catch (error) {
-      console.error(`Error menghapus file ${this.filename}:`, error);
-    }
-  }
-  next();
+// Indexes for performance
+documentSchema.index({ capstoneCategory: 1, documentType: 1 });
+documentSchema.index({ project: 1 });
+documentSchema.index({ uploadedBy: 1 });
+documentSchema.index({ isPublic: 1 });
+documentSchema.index({ createdAt: -1 });
+
+// Virtual untuk formatted file size
+documentSchema.virtual('formattedFileSize').get(function() {
+  return FileValidationManager.formatFileSize(this.fileSize);
+});
+
+// Virtual untuk file category
+documentSchema.virtual('fileCategory').get(function() {
+  return FileValidationManager.getFileCategory(this.mimeType);
 });
 
 module.exports = mongoose.model('Document', documentSchema);

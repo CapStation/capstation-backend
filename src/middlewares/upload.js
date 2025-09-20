@@ -1,57 +1,18 @@
 const multer = require('multer');
 const path = require('path');
+const FileValidationManager = require('../utils/FileValidationManager');
 
 // Use memory storage for base64 conversion (tidak simpan ke disk)
 const storage = multer.memoryStorage();
 
-const fileFilter = (req, file, cb) => {
-  console.log('🔍 Multer file filter processing:', {
-    originalname: file.originalname,
-    mimetype: file.mimetype,
-    size: file.size
-  });
-  
-  // Allowed file types
-  const allowedTypes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain',
-    'image/jpeg',
-    'image/png',
-    'image/jpg',
-    'image/gif',
-    'video/mp4',
-    'video/avi',
-    'video/mov',
-    'video/wmv'
-  ];
-
-  const allowedExtensions = [
-    '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt', 
-    '.jpg', '.jpeg', '.png', '.gif', '.mp4', '.avi', '.mov', '.wmv'
-  ];
-  
-  const fileExtension = path.extname(file.originalname).toLowerCase();
-
-  if (allowedTypes.includes(file.mimetype) && allowedExtensions.includes(fileExtension)) {
-    console.log('✅ File filter passed');
-    cb(null, true);
-  } else {
-    console.log('❌ File filter rejected:', { mimetype: file.mimetype, extension: fileExtension });
-    cb(new Error('Tipe file tidak diizinkan! Lihat dokumentasi untuk tipe file yang valid.'), false);
-  }
-};
+// Use centralized file filter from FileValidationManager
+const fileFilter = FileValidationManager.getMulterFileFilter();
 
 const upload = multer({
   storage: storage, // Memory storage untuk base64
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit (disesuaikan dengan video)
-    files: 1 // Maksimal 1 file per upload
+    fileSize: 100 * 1024 * 1024,
+    files: 10 // Maksimal 1 file per upload
   },
   fileFilter: fileFilter
 });
@@ -88,7 +49,7 @@ const uploadSingle = (fieldname) => {
 
 // Error handler untuk multer
 const handleMulterError = (error, req, res, next) => {
-  console.log('⚠️ Multer error handler triggered:', error.message);
+  console.log('Multer error handler trigger', error.message);
   
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
@@ -100,7 +61,7 @@ const handleMulterError = (error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_COUNT') {
       return res.status(400).json({
         success: false,
-        message: 'Terlalu banyak file! Maksimal 1 file per upload'
+        message: 'Terlalu banyak file! Maksimal 10 file per upload'
       });
     }
     if (error.code === 'LIMIT_UNEXPECTED_FILE') {

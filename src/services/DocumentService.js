@@ -1,14 +1,13 @@
 const Document = require('../models/Document');
 const Project = require('../models/Project');
-const User = require('../models/User');
+const User = require('../models/userModel'); // Use real auth system
 const Base64FileService = require('./Base64FileService');
 const GridFSService = require('./GridFSService'); // Add GridFS for large files
 
 /**
  * DocumentService Class  
  * Mengelola operasi CRUD untuk dokumen capstone dengan base64 storage
- * Mendukung capstone 1 (proposal, PPT) dan capstone 2 (gambar alat, poster, video)
- * Menggunakan Object-Oriented Programming approach
+ * capstone 1 (proposal, PPT) dan capstone 2 (gambar alat, poster, video)
  */
 class DocumentService {
   constructor() {
@@ -19,53 +18,62 @@ class DocumentService {
 
   /**
    * Get all documents with pagination and filtering
-   * @param {Object} filters - Filter options including page, limit, search, etc.
+   * @param {Object} filters - Filter options page, limit, search, etc.
+   * @param {String} userId - Current user ID for access control
    * @returns {Promise<Object>} Documents with pagination info
    */
-  async getAllDocuments(filters = {}) {
+  async getAllDocuments(filters = {}, userId = null) {
     try {
-      const { page = 1, limit = 10, search, documentType, capstoneType, mimeType, sortBy = 'createdAt', sortOrder = 'desc' } = filters;
+      const { page = 1, limit = 10, search, documentType, capstoneCategory, mimeType, sortBy = 'createdAt', sortOrder = 'desc' } = filters;
       const skip = (page - 1) * limit;
       
-      // Build query object
-      const query = {};
+      // build query object - show active documents that are public OR owned by user
+      const query = { 
+        isActive: true,
+        $or: [
+          { isPublic: true },  // Public documents
+          ...(userId ? [{ uploadedBy: userId }] : [])  // User's own documents if authenticated
+        ]
+      };
       
-      // Add search filter
+      // add search filter
       if (search) {
-        query.$or = [
-          { title: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } },
-          { originalName: { $regex: search, $options: 'i' } }
-        ];
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { title: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+            { originalName: { $regex: search, $options: 'i' } }
+          ]
+        });
       }
       
-      // Add specific filters
+      // add specific filters
       if (documentType) query.documentType = documentType;
-      if (capstoneType) query.capstoneCategory = capstoneType;
+      if (capstoneCategory) query.capstoneCategory = capstoneCategory;
       if (mimeType) query.mimeType = mimeType;
       
-      // Build sort object
       const sort = {};
       sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
       
-      // Simplified query without populate to avoid slow performance
       const [documents, total] = await Promise.all([
         this.model.find(query)
-          .select('-fileData') // Exclude file data for list view
+          .populate('project', 'title tema status academicYear')
+          .select('-fileData') // Exclude fileData for performance
           .sort(sort)
           .skip(skip)
           .limit(limit)
-          .lean(), // Use lean for better performance
+          .lean(),
         this.model.countDocuments(query)
       ]);
 
       const pagination = {
-        page,
+        currentPage: page,
         limit,
-        total,
-        pages: Math.ceil(total / limit),
-        hasNext: page < Math.ceil(total / limit),
-        hasPrev: page > 1
+        totalDocuments: total,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPrevPage: page > 1
       };
 
       return {
@@ -79,7 +87,7 @@ class DocumentService {
 
   /**
    * Get documents by filters with pagination
-   * @param {Object} filters - Filter criteria
+   * @param {Object} filters - Kriteria filter
    * @param {Object} options - Pagination options
    * @returns {Promise<Object>} Documents with pagination info
    */
@@ -88,8 +96,8 @@ class DocumentService {
       const { page = 1, limit = 10 } = options;
       const skip = (page - 1) * limit;
       
-      // Build query object
-      const query = {};
+      // Only show active documents
+      const query = { isActive: true };
       
       // Add filters
       if (filters.capstoneCategory) query.capstoneCategory = filters.capstoneCategory;
@@ -104,15 +112,14 @@ class DocumentService {
         ];
       }
       
-      // Build sort object
       const sort = {};
       sort[filters.sortBy || 'createdAt'] = filters.sortOrder === 'asc' ? 1 : -1;
       
-      // Execute query
+      
       const [documents, total] = await Promise.all([
         this.model.find(query)
           .populate('project', 'title tema category')
-          .select('-fileData') // Exclude file data for list view
+          .select('-fileData') 
           .sort(sort)
           .skip(skip)
           .limit(limit)
@@ -187,7 +194,7 @@ class DocumentService {
         fileData: processedFile.base64Data,
         fileHash: processedFile.fileHash,
         documentType,
-        capstoneCategory: capstoneType, // Fix: map capstoneType to capstoneCategory for model
+        capstoneCategory: capstoneType, 
         project: projectId,
         uploadedBy: userId
       });
@@ -438,8 +445,12 @@ class DocumentService {
       // Process file for download
       const result = await this.base64Service.processFileForDownload(
         document.fileData,
-        document.fileHash,
-        document.originalName
+        {
+          originalName: document.originalName,
+          mimeType: document.mimeType,
+          fileExtension: document.fileExtension,
+          expectedHash: document.fileHash
+        }
       );
 
       console.log('- Converted buffer size:', result.fileBuffer.length);
@@ -479,13 +490,16 @@ class DocumentService {
       // Check permission (only uploader or admin can update)
       // Skip permission check if uploadedBy is null (for testing/seeded data)
       if (document.uploadedBy && document.uploadedBy.toString() !== userId) {
-        // In production, you would check user role here
-        // For now, allow updates for testing purposes
-        console.log('⚠️ Permission check skipped for testing');
+        // Check if user is admin
+        const user = await User.findById(userId);
+        if (!user || user.role !== 'admin') {
+          throw new Error('Tidak memiliki izin untuk mengupdate dokumen ini');
+        }
+        console.log('✅ Admin access granted for document update');
       }
 
-      // Only allow updating metadata
-      const allowedFields = ['title', 'description', 'tags'];
+      // Only allow updating metadata (add isPublic for admin control)
+      const allowedFields = ['title', 'description', 'tags', 'isPublic'];
       const updateObject = {};
       
       allowedFields.forEach(field => {
@@ -576,8 +590,8 @@ class DocumentService {
         throw new Error('Dokumen tidak ditemukan');
       }
 
-      // Check permission
-      if (document.uploadedBy.toString() !== userId) {
+      // Check permission - skip permission check if uploadedBy is null (for testing/seeded data)
+      if (document.uploadedBy && document.uploadedBy.toString() !== userId) {
         const user = await User.findById(userId);
         if (!user || user.role !== 'admin') {
           throw new Error('Tidak memiliki izin untuk menghapus dokumen ini');
@@ -753,6 +767,296 @@ class DocumentService {
       return results;
     } catch (error) {
       throw new Error(`Gagal bulk delete dokumen: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get documents by project tema with filtering
+   * @param {Object} filters - Filter options including tema, documentType, capstoneCategory
+   * @param {Object} options - Pagination options (page, limit, sortBy, sortOrder)
+   * @returns {Promise<Object>} Documents with pagination info
+   */
+  async getDocumentsByTema(filters = {}, options = {}) {
+    try {
+      const { tema, documentType, capstoneCategory } = filters;
+      const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+      const skip = (page - 1) * limit;
+
+      // Build aggregation pipeline to join with Project collection
+      const pipeline = [
+        // Lookup project data to get tema
+        {
+          $lookup: {
+            from: 'projects', // Collection name in MongoDB
+            localField: 'project',
+            foreignField: '_id',
+            as: 'projectData'
+          }
+        },
+        // Unwind project data
+        {
+          $unwind: {
+            path: '$projectData',
+            preserveNullAndEmptyArrays: false // Only documents with valid projects
+          }
+        },
+        // Match tema
+        {
+          $match: {
+            'projectData.tema': tema
+          }
+        }
+      ];
+
+      // Add additional filters
+      const additionalMatches = {};
+      if (documentType) additionalMatches.documentType = documentType;
+      if (capstoneCategory) additionalMatches.capstoneCategory = capstoneCategory;
+
+      if (Object.keys(additionalMatches).length > 0) {
+        pipeline.push({
+          $match: additionalMatches
+        });
+      }
+
+      // Add project info to results
+      pipeline.push({
+        $addFields: {
+          'tema': '$projectData.tema',
+          'projectTitle': '$projectData.title',
+          'projectDescription': '$projectData.description'
+        }
+      });
+
+      pipeline.push({
+        $project: {
+          projectData: 0 
+        }
+      });
+
+      // Sort
+      const sortObject = {};
+      sortObject[sortBy] = sortOrder === 'asc' ? 1 : -1;
+      pipeline.push({ $sort: sortObject });
+
+      // Get total count for pagination
+      const countPipeline = [...pipeline, { $count: 'total' }];
+      const countResult = await this.model.aggregate(countPipeline);
+      const totalDocuments = countResult.length > 0 ? countResult[0].total : 0;
+
+      // Add pagination
+      pipeline.push({ $skip: skip });
+      pipeline.push({ $limit: limit });
+
+      // Execute aggregation
+      const documents = await this.model.aggregate(pipeline);
+
+      // Calculate pagination info
+      const totalPages = Math.ceil(totalDocuments / limit);
+      const hasNextPage = page < totalPages;
+      const hasPrevPage = page > 1;
+
+      return {
+        documents,
+        totalDocuments,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalDocuments,
+          hasNextPage,
+          hasPrevPage,
+          limit
+        }
+      };
+    } catch (error) {
+      throw new Error(`Failed to get documents by tema: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get documents by capstone category with validation
+   * @param {string} capstoneCategory - Capstone category (capstone1 or capstone2)
+   * @param {Object} options - Pagination options (page, limit, sortBy, sortOrder)
+   * @returns {Promise<Object>} Documents with pagination info
+   */
+  async getDocumentsByCapstoneCategory(capstoneCategory, options = {}) {
+    try {
+      // Validate capstone category
+      const validCategories = ['capstone1', 'capstone2', 'general'];
+      if (!validCategories.includes(capstoneCategory)) {
+        throw new Error(`Invalid capstone category '${capstoneCategory}'. Valid categories are: ${validCategories.join(', ')}`);
+      }
+
+      const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = options;
+      const skip = (page - 1) * limit;
+
+      // Build query
+      const query = {
+        capstoneCategory: capstoneCategory,
+        isActive: true
+      };
+
+      // Build sort object
+      const sortObject = {};
+      sortObject[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+      // Get documents and total count
+      const [documents, totalDocuments] = await Promise.all([
+        this.model.find(query)
+          .populate('project', 'title tema status academicYear')
+          .sort(sortObject)
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        this.model.countDocuments(query)
+      ]);
+
+      // Calculate pagination info
+      const totalPages = Math.ceil(totalDocuments / limit);
+      const hasNextPage = page < totalPages;
+      const hasPrevPage = page > 1;
+
+      return {
+        documents,
+        totalDocuments,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalDocuments,
+          hasNextPage,
+          hasPrevPage,
+          limit
+        }
+      };
+    } catch (error) {
+      throw new Error(`Failed to get documents by capstone category: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get document statistics by tema
+   * @param {string} tema - Project theme to filter by
+   * @returns {Promise<Object>} Statistics for documents by tema
+   */
+  async getDocumentStatsByTema(tema) {
+    try {
+      const pipeline = [
+        // Lookup project data to get tema
+        {
+          $lookup: {
+            from: 'projects',
+            localField: 'project', 
+            foreignField: '_id',
+            as: 'projectData'
+          }
+        },
+        // Unwind project data
+        {
+          $unwind: {
+            path: '$projectData',
+            preserveNullAndEmptyArrays: false
+          }
+        },
+        // Match tema and active documents
+        {
+          $match: {
+            'projectData.tema': tema,
+            isActive: true
+          }
+        },
+        // Group and calculate basic statistics
+        {
+          $group: {
+            _id: null,
+            totalDocuments: { $sum: 1 },
+            totalSize: { $sum: '$fileSize' },
+            totalDownloads: { $sum: '$downloadCount' },
+            documentTypes: { $addToSet: '$documentType' },
+            capstoneCategories: { $addToSet: '$capstoneCategory' },
+            mimeTypes: { $addToSet: '$mimeType' },
+            averageFileSize: { $avg: '$fileSize' }
+          }
+        },
+        // Format output
+        {
+          $project: {
+            _id: 0,
+            tema: tema,
+            totalDocuments: 1,
+            totalSize: 1,
+            totalDownloads: 1,
+            documentTypes: 1,
+            capstoneCategories: 1,
+            mimeTypes: 1,
+            averageFileSize: { $round: ['$averageFileSize', 2] }
+          }
+        }
+      ];
+
+      // Separate aggregation for breakdown by type and category
+      const breakdownPipeline = [
+        {
+          $lookup: {
+            from: 'projects',
+            localField: 'project', 
+            foreignField: '_id',
+            as: 'projectData'
+          }
+        },
+        {
+          $unwind: {
+            path: '$projectData',
+            preserveNullAndEmptyArrays: false
+          }
+        },
+        {
+          $match: {
+            'projectData.tema': tema,
+            isActive: true
+          }
+        },
+        {
+          $group: {
+            _id: {
+              type: '$documentType',
+              category: '$capstoneCategory'
+            },
+            count: { $sum: 1 },
+            downloads: { $sum: '$downloadCount' }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            type: '$_id.type',
+            category: '$_id.category',
+            count: 1,
+            downloads: 1
+          }
+        }
+      ];
+
+      const [stats, breakdown] = await Promise.all([
+        Document.aggregate(pipeline),
+        Document.aggregate(breakdownPipeline)
+      ]);
+
+      const result = stats[0] || {
+        tema,
+        totalDocuments: 0,
+        totalSize: 0,
+        totalDownloads: 0,
+        documentTypes: [],
+        capstoneCategories: [],
+        mimeTypes: [],
+        averageFileSize: 0
+      };
+
+      result.breakdown = breakdown || [];
+
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to get document statistics by tema: ${error.message}`);
     }
   }
 }
