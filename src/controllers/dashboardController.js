@@ -1,26 +1,51 @@
 const Capstone = require('../models/capstoneModel');
+const Group = require('../models/groupModel');
+const Announcement = require('../models/announcementModel');
 
-exports.getDashboardSummary = async (req, res, next) => {
+exports.getDashboard = async (req, res, next) => {
   try {
     const totalProjects = await Capstone.countDocuments();
+    const waitingApproval = await Capstone.countDocuments({ status: 'Menunggu' });
+    const ongoingProjects = await Capstone.countDocuments({ status: 'Bisa dilanjutkan' });
+    const closedProjects = await Capstone.countDocuments({ status: 'Ditutup' });
 
     const perCategory = await Capstone.aggregate([
-      { $group: { _id: '$category', count: { $sum: 1 } } },
-      { $project: { category: '$_id', count: 1, _id: 0 } }
+      { $group: { _id: '$category', count: { $sum: 1 } } }
     ]);
 
     const perStatus = await Capstone.aggregate([
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-      { $project: { status: '$_id', count: 1, _id: 0 } }
+      { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
-    const latest = await Capstone.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('title category status createdAt')
-      .populate('owner', 'name');
+    const groupsPerCategory = await Group.aggregate([
+      { $lookup: {
+          from: 'capstones',
+          localField: 'capstone',
+          foreignField: '_id',
+          as: 'capstoneData'
+        }
+      },
+      { $unwind: '$capstoneData' },
+      { $group: { _id: '$capstoneData.category', count: { $sum: 1 } } }
+    ]);
 
-    res.json({ totalProjects, perCategory, perStatus, latest });
+    const latest = await Capstone.find().sort({ createdAt: -1 }).limit(5);
+    const announcements = await Announcement.find()
+      .populate('createdBy', 'name role')
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    res.json({
+      totalProjects,
+      waitingApproval,
+      ongoingProjects,
+      closedProjects,
+      perCategory,
+      perStatus,
+      groupsPerCategory,
+      latest,
+      announcements
+    });
   } catch (err) {
     next(err);
   }

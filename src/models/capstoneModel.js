@@ -12,8 +12,8 @@ const capstoneSchema = new Schema({
   year: Number, 
   status: { 
     type: String, 
-    enum: ['Bisa dilanjutkan','Ditutup'], 
-    default: 'Bisa dilanjutkan' 
+    enum: ['Menunggu','Bisa dilanjutkan','Ditutup'], 
+    default: 'Menunggu' 
   },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // pemilik proyek (mahasiswa)
   members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
