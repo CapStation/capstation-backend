@@ -1,23 +1,5 @@
 const Group = require('../models/groupModel');
 
-exports.createGroup = async (req, res, next) => {
-  try {
-    const { name, capstone, owner, members } = req.body;
-
-    const group = new Group({
-      name,
-      capstone,
-      owner,
-      members
-    });
-
-    await group.save();
-    res.status(201).json(group);
-  } catch (err) {
-    next(err);
-  }
-};
-
 exports.getAllGroups = async (req, res, next) => {
   try {
     const groups = await Group.find()
