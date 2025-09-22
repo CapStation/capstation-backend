@@ -1,16 +1,22 @@
 const express = require('express');
+const authRoutes = require('./auth');
+const projectRoutes = require('./projects');
+const documentRoutes = require('./documents');
+
 const router = express.Router();
 
-const authRoutes = require('./authRoutes');
-const capstoneRoutes = require('./capstoneRoutes'); 
-const groupRoutes = require('./groupRoutes');
-const dashboardRoutes = require('./dashboardRoutes');
-const announcementRoutes = require('./announcementRoutes');
+// system health endpoint
+router.get('/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CapStation API is running',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
 
 router.use('/auth', authRoutes);
-router.use('/capstones', capstoneRoutes);
-router.use('/groups', groupRoutes);
-router.use('/dashboard', dashboardRoutes);
-router.use('/announcements', announcementRoutes);
+router.use('/projects', projectRoutes);
+router.use('/documents', documentRoutes);
 
 module.exports = router;
