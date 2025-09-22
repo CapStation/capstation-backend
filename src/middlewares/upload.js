@@ -11,8 +11,10 @@ const fileFilter = FileValidationManager.getMulterFileFilter();
 const upload = multer({
   storage: storage, // Memory storage untuk base64
   limits: {
-    fileSize: 100 * 1024 * 1024,
-    files: 10 // Maksimal 1 file per upload
+    fileSize: 100 * 1024 * 1024, // 100MB limit
+    files: 10, // Maksimal 10 files per upload
+    fieldSize: 10 * 1024 * 1024, // 10MB field size limit
+    fields: 50 // Maximum number of fields
   },
   fileFilter: fileFilter
 });
@@ -55,7 +57,7 @@ const handleMulterError = (error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File terlalu besar! Maksimal 50MB'
+        message: 'File terlalu besar! Maksimal 100MB'
       });
     }
     if (error.code === 'LIMIT_FILE_COUNT') {

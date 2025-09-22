@@ -15,8 +15,33 @@ class Base64FileService {
 
       console.log(`Converting file to base64 (${fileBuffer.length} bytes)...`);
       
+      // Check buffer size and validate boundaries
+      const bufferSize = fileBuffer.length;
+      if (bufferSize === 0) {
+        throw new Error("Buffer kosong tidak dapat dikonversi");
+      }
+
+      // For very large files (>16MB), process in chunks to avoid memory issues
+      const CHUNK_SIZE = 16 * 1024 * 1024; // 16MB chunks
+      let base64String;
+
+      if (bufferSize > CHUNK_SIZE) {
+        console.log(`Large file detected (${bufferSize} bytes), processing in chunks...`);
+        const chunks = [];
+        
+        for (let offset = 0; offset < bufferSize; offset += CHUNK_SIZE) {
+          const endOffset = Math.min(offset + CHUNK_SIZE, bufferSize);
+          const chunk = fileBuffer.subarray(offset, endOffset);
+          chunks.push(chunk.toString("base64"));
+        }
+        
+        base64String = chunks.join("");
+        console.log(`Processed ${chunks.length} chunks successfully`);
+      } else {
+        base64String = fileBuffer.toString("base64");
+      }
+      
       const hash = this.generateFileHash(fileBuffer);
-      const base64String = fileBuffer.toString("base64");
 
       return {
         base64: base64String,
@@ -25,6 +50,7 @@ class Base64FileService {
         base64Size: base64String.length
       };
     } catch (error) {
+      console.error(`Error in fileToBase64: ${error.message}`);
       throw new Error(`Error converting file to base64: ${error.message}`);
     }
   }
@@ -40,7 +66,23 @@ class Base64FileService {
         cleanBase64 = base64String.split(",")[1];
       }
 
+      // Validate base64 string length before conversion
+      if (cleanBase64.length === 0) {
+        throw new Error("Base64 string kosong setelah pembersihan");
+      }
+
+      // Check if base64 string is properly padded
+      const padding = cleanBase64.length % 4;
+      if (padding === 1) {
+        throw new Error("Base64 string tidak valid: padding incorrect");
+      }
+
       const fileBuffer = Buffer.from(cleanBase64, "base64");
+
+      // Validate buffer was created successfully
+      if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+        throw new Error("Gagal membuat buffer dari base64 string");
+      }
 
       if (expectedHash) {
         const actualHash = this.generateFileHash(fileBuffer);
@@ -51,6 +93,7 @@ class Base64FileService {
 
       return fileBuffer;
     } catch (error) {
+      console.error(`Error in base64ToFile: ${error.message}`);
       throw new Error(`Error converting base64 to file: ${error.message}`);
     }
   }

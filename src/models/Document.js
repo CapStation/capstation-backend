@@ -39,7 +39,27 @@ const documentSchema = new mongoose.Schema({
   // Base64 storage
   fileData: {
     type: String,
-    required: [true, 'Data file base64 harus ada']
+    required: false, // Optional for GridFS files
+    validate: {
+      validator: function() {
+        // Either fileData or gridfsFileId must be present
+        return this.fileData || this.gridfsFileId;
+      },
+      message: 'Either fileData or gridfsFileId must be provided'
+    }
+  },
+
+  // GridFS file reference for large files
+  gridfsFileId: {
+    type: String,
+    required: false,
+    validate: {
+      validator: function() {
+        // Either fileData or gridfsFileId must be present
+        return this.fileData || this.gridfsFileId;
+      },
+      message: 'Either fileData or gridfsFileId must be provided'
+    }
   },
   
   // Capstone category

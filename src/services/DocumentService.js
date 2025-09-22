@@ -176,23 +176,54 @@ class DocumentService {
         throw new Error('Project tidak ditemukan');
       }
 
-      // Process file with base64 service
-      const processedFile = await this.base64Service.processFileForUpload(fileBuffer, {
-        originalName,
-        mimeType,
-        documentType
-      });
+      // Process file - check if it should use GridFS for large files
+      const fileSize = fileBuffer.length;
+      const shouldUseGridFS = this.gridfsService.shouldUseGridFS(fileSize);
+
+      let fileData = null;
+      let gridfsFileId = null;
+      let fileHash = null;
+
+      if (shouldUseGridFS) {
+        console.log(`📦 Large file detected (${fileSize} bytes), using GridFS storage`);
+        
+        // Store in GridFS
+        gridfsFileId = await this.gridfsService.storeFile(fileBuffer, {
+          originalName,
+          mimeType,
+          documentType,
+          capstoneCategory: capstoneType
+        });
+
+        // Generate hash for integrity
+        fileHash = require('crypto').createHash('sha256').update(fileBuffer).digest('hex');
+        
+        console.log(`✅ File stored in GridFS with ID: ${gridfsFileId}`);
+      } else {
+        console.log(`📄 Small file (${fileSize} bytes), using base64 storage`);
+        
+        // Process with base64 service for small files
+        const processedFile = await this.base64Service.processFileForUpload(fileBuffer, {
+          originalName,
+          mimeType,
+          documentType
+        });
+
+        fileData = processedFile.base64Data;
+        fileHash = processedFile.fileHash;
+      }
 
       // Create document
       const newDocument = new this.model({
         title,
         description,
-        originalName: processedFile.originalName,
-        fileSize: processedFile.fileSize,
-        mimeType: processedFile.mimeType,
-        fileExtension: processedFile.fileExtension,
-        fileData: processedFile.base64Data,
-        fileHash: processedFile.fileHash,
+        originalName,
+        fileSize,
+        mimeType,
+        fileExtension: require('path').extname(originalName).toLowerCase(),
+        fileData, // null if stored in GridFS
+        gridfsFileId, // null if stored as base64
+        fileHash,
         documentType,
         capstoneCategory: capstoneType, 
         project: projectId,
@@ -222,7 +253,7 @@ class DocumentService {
     try {
       let projection = {};
       
-      // Exclude fileData by default for performance
+      // Exclude fileData by default for performance, but always include gridfsFileId
       if (!includeFileData) {
         projection = { fileData: 0 };
       }
@@ -240,25 +271,30 @@ class DocumentService {
         throw new Error('Dokumen tidak ditemukan');
       }
 
-      if (includeFileData && document.fileData) {
+      if (includeFileData) {
         console.log('📊 MongoDB query result:');
-        console.log('- Document fileData exists:', !!document.fileData);
-        console.log('- FileData type:', typeof document.fileData);
-        console.log('- FileData length:', document.fileData.length);
-        console.log('- FileData first 100 chars:', document.fileData.substring(0, 100));
-        console.log('- FileData last 100 chars:', document.fileData.substring(document.fileData.length - 100));
+        console.log('- Document has fileData:', !!document.fileData);
+        console.log('- Document has gridfsFileId:', !!document.gridfsFileId);
         
-        // Check if fileData contains valid base64
-        const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-        const isValidBase64 = base64Regex.test(document.fileData);
-        console.log('- Is valid Base64 format:', isValidBase64);
-        
-        if (!isValidBase64) {
-          console.log('❌ FileData is not valid Base64 format!');
-          console.log('- Sample chars that failed:', document.fileData.substring(0, 200));
+        if (document.fileData) {
+          console.log('- FileData type:', typeof document.fileData);
+          console.log('- FileData length:', document.fileData.length);
+          console.log('- FileData first 100 chars:', document.fileData.substring(0, 100));
+          
+          // Check if fileData contains valid base64
+          const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+          const isValidBase64 = base64Regex.test(document.fileData);
+          console.log('- Is valid Base64 format:', isValidBase64);
+          
+          if (!isValidBase64) {
+            console.log('❌ FileData is not valid Base64 format!');
+            console.log('- Sample chars that failed:', document.fileData.substring(0, 200));
+          }
         }
-      } else if (includeFileData && !document.fileData) {
-        console.log('❌ FileData requested but not found in document');
+        
+        if (document.gridfsFileId) {
+          console.log('- GridFS File ID:', document.gridfsFileId);
+        }
       }
 
       return document;
@@ -440,20 +476,47 @@ class DocumentService {
       console.log('- Document ID:', documentId);
       console.log('- Original file size:', document.fileSize);
       console.log('- File hash:', document.fileHash);
-      console.log('- Base64 data length:', document.fileData ? document.fileData.length : 'NULL');
+      console.log('- Has GridFS ID:', !!document.gridfsFileId);
+      console.log('- Has Base64 data:', !!document.fileData);
 
-      // Process file for download
-      const result = await this.base64Service.processFileForDownload(
-        document.fileData,
-        {
+      let result;
+
+      if (document.gridfsFileId) {
+        // File is stored in GridFS
+        console.log('📦 Retrieving file from GridFS:', document.gridfsFileId);
+        
+        const gridfsFile = await this.gridfsService.retrieveFile(document.gridfsFileId);
+        
+        result = {
+          fileBuffer: gridfsFile.fileBuffer,
           originalName: document.originalName,
           mimeType: document.mimeType,
+          fileSize: document.fileSize,
           fileExtension: document.fileExtension,
-          expectedHash: document.fileHash
-        }
-      );
+          downloadTimestamp: new Date().toISOString()
+        };
 
-      console.log('- Converted buffer size:', result.fileBuffer.length);
+        console.log('- Retrieved buffer size from GridFS:', result.fileBuffer.length);
+      } else if (document.fileData) {
+        // File is stored as base64
+        console.log('📄 Retrieving file from base64 storage');
+        console.log('- Base64 data length:', document.fileData.length);
+
+        result = await this.base64Service.processFileForDownload(
+          document.fileData,
+          {
+            originalName: document.originalName,
+            mimeType: document.mimeType,
+            fileExtension: document.fileExtension,
+            expectedHash: document.fileHash
+          }
+        );
+
+        console.log('- Converted buffer size:', result.fileBuffer.length);
+      } else {
+        throw new Error('File data not found - neither GridFS nor base64 data available');
+      }
+
       console.log('- Expected vs Actual size match:', document.fileSize === result.fileBuffer.length);
 
       // Update download count

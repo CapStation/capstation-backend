@@ -137,7 +137,7 @@ class GridFSService {
    * @returns {Boolean} GridFS
    */
   shouldUseGridFS(fileSize) {
-    const GRIDFS_THRESHOLD = 20 * 1024 * 1024; // 20MB
+    const GRIDFS_THRESHOLD = 10 * 1024 * 1024; // 10MB 
     return fileSize > GRIDFS_THRESHOLD;
   }
 
