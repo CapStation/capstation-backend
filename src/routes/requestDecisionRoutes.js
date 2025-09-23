@@ -1,13 +1,14 @@
 const router = require('express').Router();
 const c = require('../controllers/requestDecisionController');
 
-// POST /api/requests
+// existing
 router.post('/requests', c.createRequest);
-
-// GET /api/requests
 router.get('/requests', c.listRequests);
-
-// PATCH /api/requests/:id/decide
 router.patch('/requests/:id/decide', c.decideRequest);
+router.get('/requests/decided/me', c.listMyDecisions);  
+router.get('/owner/requests', c.listOwnedRequests);     
+
+router.get('/me/decisions', c.listMyDecisions);
+router.get('/me/owner/requests', c.listOwnedRequests);
 
 module.exports = router;

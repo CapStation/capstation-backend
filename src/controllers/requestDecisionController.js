@@ -1,6 +1,27 @@
 const Store = require('../models/store');
 
-// Ajukan request kelanjutan
+function enrichRequests(data, expandOrEmbed) {
+  const expand = String(expandOrEmbed || '').toLowerCase();
+  return data.map(r => {
+    const cap = Store.capstones.find(c => c.id === r.capstoneId);
+    if (expand === 'capstone') {
+      return {
+        ...r,
+        capstone: cap ? {
+          id: cap.id, judul: cap.judul, kategori: cap.kategori,
+          pemilikId: cap.pemilikId, status: cap.status
+        } : null
+      };
+    }
+    return {
+      ...r,
+      capstonePemilikId: cap ? cap.pemilikId : null,
+      capstoneJudul: cap ? cap.judul : null
+    };
+  });
+}
+
+// Ajukan request kelanjutan.
 exports.createRequest = (req, res) => {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const { capstoneId, groupName, tahunPengajuan } = body;
@@ -36,42 +57,33 @@ exports.createRequest = (req, res) => {
   return res.status(201).json(reqObj);
 };
 
-// Lihat semua request
-// Tambahan: ?expand=capstone untuk dapat objek capstone lengkap
+// List request.
+// Filter: status, capstoneId, decider=me, decidedByUser, decidedByRole, onlyOwned=true, expand=capstone | embed=capstone
 exports.listRequests = (req, res) => {
-  const { capstoneId, status, expand } = req.query;
+  const { capstoneId, status, expand, decidedByRole, decidedByUser, decider, onlyOwned, embed } = req.query;
 
-  let data = Store.requests;
+  let data = Store.requests.slice();
   if (capstoneId) data = data.filter(r => r.capstoneId === capstoneId);
   if (status) data = data.filter(r => r.status === status);
 
-  const enriched = data.map(r => {
-    const cap = Store.capstones.find(c => c.id === r.capstoneId);
-    if (String(expand).toLowerCase() === 'capstone') {
-      return {
-        ...r,
-        capstone: cap
-          ? {
-              id: cap.id,
-              judul: cap.judul,
-              kategori: cap.kategori,
-              pemilikId: cap.pemilikId,
-              status: cap.status,
-            }
-          : null,
-      };
-    }
-    return {
-      ...r,
-      capstonePemilikId: cap ? cap.pemilikId : null,
-      capstoneJudul: cap ? cap.judul : null,
-    };
-  });
+  if (decidedByRole) data = data.filter(r => r.decidedByRole === decidedByRole);
+  if (decidedByUser) data = data.filter(r => r.decidedByUser === decidedByUser);
+  if (String(decider).toLowerCase() === 'me') {
+    data = data.filter(r => r.decidedByUser === req.user.id);
+  }
 
-  return res.json({ count: enriched.length, data: enriched });
+  if (String(onlyOwned).toLowerCase() === 'true') {
+    data = data.filter(r => {
+      const cap = Store.capstones.find(c => c.id === r.capstoneId);
+      return cap && cap.pemilikId === req.user.id;
+    });
+  }
+
+  const out = enrichRequests(data, expand || embed);
+  return res.json({ count: out.length, data: out });
 };
 
-// Putuskan request oleh dosen atau pemilik
+// Putuskan request oleh dosen atau pemilik.
 exports.decideRequest = (req, res) => {
   const { id } = req.params;
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -107,6 +119,35 @@ exports.decideRequest = (req, res) => {
   return res.json({
     ...updated,
     capstonePemilikId: capstone.pemilikId,
-    capstoneJudul: capstone.judul,
+    capstoneJudul: capstone.judul
   });
+};
+
+// Alias rapi: keputusan yang saya buat.
+exports.listMyDecisions = (req, res) => {
+  const status = req.query.status;
+  const expandOrEmbed = req.query.expand || req.query.embed;
+  let data = Store.requests.filter(r => r.decidedByUser === req.user.id);
+  if (status) data = data.filter(r => r.status === status);
+  const out = enrichRequests(data, expandOrEmbed);
+  res.json({ count: out.length, data: out });
+};
+
+// Alias rapi: semua request untuk capstone milik saya. Khusus pemilik.
+exports.listOwnedRequests = (req, res) => {
+  if (req.user.role !== 'pemilik') {
+    return res.status(403).json({ error: 'Hanya pemilik yang boleh mengakses' });
+  }
+  const status = req.query.status;
+  const expandOrEmbed = req.query.expand || req.query.embed;
+
+  const ownedIds = Store.capstones
+    .filter(c => c.pemilikId === req.user.id)
+    .map(c => c.id);
+
+  let data = Store.requests.filter(r => ownedIds.includes(r.capstoneId));
+  if (status) data = data.filter(r => r.status === status);
+
+  const out = enrichRequests(data, expandOrEmbed);
+  res.json({ count: out.length, data: out });
 };
