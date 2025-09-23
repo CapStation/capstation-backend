@@ -1,37 +1,20 @@
 const Store = require('../models/store');
 
-exports.listCapstones = (req, res) => {
-  const { status, kategori } = req.query;
-  let data = Store.capstones;
-
-  if (!status) {
-    data = data.filter(c => c.status === Store.CAPSTONE_STATUS.BISA_DILANJUTKAN);
-  } else {
-    data = data.filter(c => c.status.toLowerCase() === String(status).toLowerCase());
-  }
-
-  if (kategori) {
-    data = data.filter(c => c.kategori.toLowerCase() === String(kategori).toLowerCase());
-  }
-
-  res.json({ count: data.length, data });
-};
-
+// Ajukan request kelanjutan
 exports.createRequest = (req, res) => {
-  // Guard aman saat body undefined
-  if (!req.body || typeof req.body !== 'object') {
-    return res.status(400).json({ error: 'Body kosong. Kirim JSON dengan Content-Type application/json' });
-  }
-
-  const { capstoneId, groupName, tahunPengajuan } = req.body;
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const { capstoneId, groupName, tahunPengajuan } = body;
 
   if (!capstoneId || !groupName || !tahunPengajuan) {
-    return res.status(400).json({ error: 'capstoneId, groupName, tahunPengajuan wajib' });
+    return res.status(400).json({
+      error: 'Beberapa field wajib belum diisi',
+      requiredFields: ['capstoneId', 'groupName', 'tahunPengajuan'],
+      example: { capstoneId: 'c1', groupName: 'Nama Kelompok', tahunPengajuan: 2025 }
+    });
   }
 
   const cap = Store.capstones.find(c => c.id === capstoneId);
   if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
-
   if (cap.status !== Store.CAPSTONE_STATUS.BISA_DILANJUTKAN) {
     return res.status(400).json({ error: 'Capstone tidak berstatus Bisa dilanjutkan' });
   }
@@ -46,13 +29,14 @@ exports.createRequest = (req, res) => {
   const reqObj = Store.addRequest({
     capstoneId,
     groupName,
-    tahunPengajuan: Number(tahunPengajuan),
+    tahunPengajuan,
     pemohonId: req.user.id
   });
 
   res.status(201).json(reqObj);
 };
 
+// Lihat semua request
 exports.listRequests = (req, res) => {
   const { capstoneId, status } = req.query;
   let data = Store.requests;
@@ -61,27 +45,38 @@ exports.listRequests = (req, res) => {
   res.json({ count: data.length, data });
 };
 
+// Putuskan request oleh dosen atau pemilik
 exports.decideRequest = (req, res) => {
   const { id } = req.params;
-
-  // baca aman. Boleh juga lewat query kalau perlu.
-  const decisionFromBody = req.body && req.body.decision;
-  const decision = decisionFromBody || req.query.decision;
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const decision = body.decision || req.query.decision;
 
   if (!decision) {
-    return res.status(400).json({ error: "Kirim decision di body JSON atau query. Nilai: 'accept' atau 'reject'." });
+    return res.status(400).json({
+      error: 'Field decision wajib diisi',
+      allowed: ['accept', 'reject'],
+      example: { decision: 'accept' }
+    });
   }
   if (!['accept', 'reject'].includes(decision)) {
     return res.status(400).json({ error: "decision harus 'accept' atau 'reject'" });
   }
-
   if (!['dosen', 'pemilik'].includes(req.user.role)) {
     return res.status(403).json({ error: 'Hanya dosen atau pemilik yang boleh memutuskan' });
   }
 
-  const updated = Store.decideRequest(id, decision, req.user);
-  if (!updated) return res.status(404).json({ error: 'Request tidak ditemukan' });
+  const reqObj = Store.requests.find(r => r.id === id);
+  if (!reqObj) return res.status(404).json({ error: 'Request tidak ditemukan' });
 
+  // Pemilik hanya untuk capstone miliknya
+  if (req.user.role === 'pemilik') {
+    const capstone = Store.capstones.find(c => c.id === reqObj.capstoneId);
+    if (!capstone) return res.status(404).json({ error: 'Capstone terkait tidak ditemukan' });
+    if (capstone.pemilikId !== req.user.id) {
+      return res.status(403).json({ error: 'Anda bukan pemilik capstone ini, tidak boleh memutuskan' });
+    }
+  }
+
+  const updated = Store.decideRequest(id, decision, req.user);
   res.json(updated);
 };
-

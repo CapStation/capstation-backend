@@ -1,37 +1,28 @@
 const express = require('express');
 const app = express();
 
-// parser body
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// mock auth sederhana
+// mock auth via header
 app.use((req, res, next) => {
   req.user = {
     id: req.header('x-user-id') || 'u1',
     role: req.header('x-role') || 'mahasiswa',
-    name: req.header('x-user-name') || 'Anon'
+    name: req.header('x-user-name') || 'Anon',
   };
   next();
 });
 
-// debug endpoint untuk cek body
-app.post('/debug/echo', (req, res) => {
-  res.json({ headers: req.headers, body: req.body });
-});
+// route kelompok 1. browsing capstone
+const browseRoutes = require('./routes/capstoneBrowseRoutes');
+app.use('/api/browse', browseRoutes);
 
-const capstoneRoutes = require('./routes/capstoneRoutes');
-app.use('/api', capstoneRoutes);
+// route kelompok 2. request dan keputusan
+const requestRoutes = require('./routes/requestDecisionRoutes');
+app.use('/api', requestRoutes);
 
-app.get('/', (_, res) => res.json({ ok: true }));
-
-// handler 404
-app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
-
-// handler error
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal Server Error', detail: err.message });
-});
+// health
+app.get('/api/health', (_, res) => res.json({ ok: true }));
 
 module.exports = app;
