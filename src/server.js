@@ -1,12 +1,3 @@
-const express = require('express')
-const projectRoutes = require('./routes/projectRoutes');
-
-const app = express()
-const port = 3000
-
-// Routes utama
-app.use('/api/projects', projectRoutes);
-
-app.listen(port, () => {
-  console.log(`App listening on port ${port}`)
-})
+const app = require('./app');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`API ready at http://localhost:${PORT}`));
