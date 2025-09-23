@@ -26,3 +26,10 @@ exports.listCapstones = (req, res) => {
 
   res.json({ count: data.length, data });
 };
+
+exports.getCapstoneById = (req, res) => {
+  const { id } = req.params;
+  const cap = Store.capstones.find(c => c.id === id);
+  if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
+  res.json(cap);
+};

@@ -33,16 +33,42 @@ exports.createRequest = (req, res) => {
     pemohonId: req.user.id
   });
 
-  res.status(201).json(reqObj);
+  return res.status(201).json(reqObj);
 };
 
 // Lihat semua request
+// Tambahan: ?expand=capstone untuk dapat objek capstone lengkap
 exports.listRequests = (req, res) => {
-  const { capstoneId, status } = req.query;
+  const { capstoneId, status, expand } = req.query;
+
   let data = Store.requests;
   if (capstoneId) data = data.filter(r => r.capstoneId === capstoneId);
   if (status) data = data.filter(r => r.status === status);
-  res.json({ count: data.length, data });
+
+  const enriched = data.map(r => {
+    const cap = Store.capstones.find(c => c.id === r.capstoneId);
+    if (String(expand).toLowerCase() === 'capstone') {
+      return {
+        ...r,
+        capstone: cap
+          ? {
+              id: cap.id,
+              judul: cap.judul,
+              kategori: cap.kategori,
+              pemilikId: cap.pemilikId,
+              status: cap.status,
+            }
+          : null,
+      };
+    }
+    return {
+      ...r,
+      capstonePemilikId: cap ? cap.pemilikId : null,
+      capstoneJudul: cap ? cap.judul : null,
+    };
+  });
+
+  return res.json({ count: enriched.length, data: enriched });
 };
 
 // Putuskan request oleh dosen atau pemilik
@@ -68,15 +94,19 @@ exports.decideRequest = (req, res) => {
   const reqObj = Store.requests.find(r => r.id === id);
   if (!reqObj) return res.status(404).json({ error: 'Request tidak ditemukan' });
 
-  // Pemilik hanya untuk capstone miliknya
-  if (req.user.role === 'pemilik') {
-    const capstone = Store.capstones.find(c => c.id === reqObj.capstoneId);
-    if (!capstone) return res.status(404).json({ error: 'Capstone terkait tidak ditemukan' });
-    if (capstone.pemilikId !== req.user.id) {
-      return res.status(403).json({ error: 'Anda bukan pemilik capstone ini, tidak boleh memutuskan' });
-    }
+  // Validasi pemilik. Dosen bebas.
+  const capstone = Store.capstones.find(c => c.id === reqObj.capstoneId);
+  if (!capstone) return res.status(404).json({ error: 'Capstone terkait tidak ditemukan' });
+
+  if (req.user.role === 'pemilik' && capstone.pemilikId !== req.user.id) {
+    return res.status(403).json({ error: 'Anda bukan pemilik capstone ini, tidak boleh memutuskan' });
   }
 
   const updated = Store.decideRequest(id, decision, req.user);
-  res.json(updated);
+
+  return res.json({
+    ...updated,
+    capstonePemilikId: capstone.pemilikId,
+    capstoneJudul: capstone.judul,
+  });
 };
