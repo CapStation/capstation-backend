@@ -3,10 +3,10 @@ require('dotenv').config();
 
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/capstation';
+    const uri = process.env.MONGO_URI;
     
     console.log('🔌 Attempting to connect to MongoDB...');   
-    await mongoose.connect(mongoURI);
+    await mongoose.connect(uri);
     console.log('✅ MongoDB connected successfully');
     
     mongoose.connection.on('error', (error) => {
