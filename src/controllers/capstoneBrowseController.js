@@ -1,72 +1,130 @@
-const Store = require('../models/store');
+const Capstone = require('../models/myCapstoneModel');
 
-// GET /api/browse/capstones?status=...&kategori=...
-// Default hanya "Bisa dilanjutkan". status=all untuk semua.
-exports.listCapstones = (req, res) => {
-  const { status, kategori } = req.query;
-  let data = Store.capstones;
+function normalizeStatus(s) {
+  if (s === 'Menunggu') return 'Dalam proses';
+  if (s === 'Ditutup') return 'Selesai';
+  return s;
+}
 
-  if (status) {
-    if (String(status).toLowerCase() !== 'all') {
-      data = data.filter(c => c.status.toLowerCase() === String(status).toLowerCase());
+function pickKategori(req) {
+  return req.query.category || req.query.kategori || null;
+}
+
+// GET /api/browse/capstones?status=...&category=... | &kategori=...
+exports.listCapstones = async (req, res, next) => {
+  try {
+    const { status } = req.query;
+    const kategori = pickKategori(req);
+
+    const q = {};
+    if (status) {
+      if (String(status).toLowerCase() !== 'all') q.status = status;
+    } else {
+      q.status = 'Bisa dilanjutkan';
     }
-  } else {
-    data = data.filter(c => c.status === Store.CAPSTONE_STATUS.BISA_DILANJUTKAN);
-  }
+    if (kategori) q.category = kategori;
 
-  if (kategori) {
-    data = data.filter(c => c.kategori.toLowerCase() === String(kategori).toLowerCase());
+    const docs = await Capstone.find(q).lean();
+    const data = docs.map(d => ({
+      id: String(d._id),
+      judul: d.title,
+      kategori: d.category,
+      tahun: d.year,
+      pemilikId: String(d.owner),
+      status: normalizeStatus(d.status)
+    }));
+    res.json({ count: data.length, data });
+  } catch (err) {
+    next(err);
   }
-
-  res.json({ count: data.length, data });
 };
 
 // GET /api/browse/capstones/:id
-exports.getCapstoneById = (req, res) => {
-  const cap = Store.capstones.find(c => c.id === req.params.id);
-  if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
-  res.json(cap);
+exports.getCapstoneById = async (req, res, next) => {
+  try {
+    const cap = await Capstone.findById(req.params.id).lean();
+    if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
+    res.json({
+      id: String(cap._id),
+      judul: cap.title,
+      kategori: cap.category,
+      tahun: cap.year,
+      pemilikId: String(cap.owner),
+      status: normalizeStatus(cap.status)
+    });
+  } catch (err) {
+    next(err); 
+  }
 };
 
-// GET /api/browse/categories
-exports.listCategories = (req, res) => {
-  if (String(req.query.withCounts).toLowerCase() !== 'true') {
-    return res.json({ count: Store.CATEGORIES.length, data: Store.CATEGORIES });
+// GET /api/browse/categories[?withCounts=true]
+exports.listCategories = async (req, res, next) => {
+  try {
+    const enums = Capstone.schema.path('category').enumValues || [];
+    if (String(req.query.withCounts).toLowerCase() !== 'true') {
+      return res.json({ count: enums.length, data: enums });
+    }
+
+    const rows = await Capstone.aggregate([
+      { $group: { _id: { category: '$category', status: '$status' }, count: { $sum: 1 } } }
+    ]);
+
+    const map = {};
+    for (const cat of enums) map[cat] = { category: cat, total: 0, bisaDilanjutkan: 0 };
+
+    for (const r of rows) {
+      const cat = r._id.category;
+      const st  = r._id.status;
+      if (!map[cat]) map[cat] = { category: cat, total: 0, bisaDilanjutkan: 0 };
+      map[cat].total += r.count;
+      if (st === 'Bisa dilanjutkan') map[cat].bisaDilanjutkan += r.count;
+    }
+
+    const data = enums.map(cat => map[cat]);
+    res.json({ count: data.length, data });
+  } catch (err) {
+    next(err);
   }
-  const counts = Store.CATEGORIES.map(cat => {
-    const rows = Store.capstones.filter(c => c.kategori === cat);
-    return {
-      category: cat,
-      total: rows.length,
-      bisaDilanjutkan: rows.filter(r => r.status === Store.CAPSTONE_STATUS.BISA_DILANJUTKAN).length
-    };
-  });
-  res.json({ count: counts.length, data: counts });
 };
 
-// GET /api/browse/categories/:category/capstones
-// Query: status=all, page, limit
-exports.listCapstonesByCategory = (req, res) => {
-  const raw = decodeURIComponent(req.params.category || '');
-  const matched = Store.CATEGORIES.find(e => e.toLowerCase() === raw.toLowerCase());
-  if (!matched) {
-    return res.status(400).json({ error: 'Kategori tidak valid', allowed: Store.CATEGORIES });
+// GET /api/browse/categories/:category/capstones?status=all&page=1&limit=10
+exports.listCapstonesByCategory = async (req, res, next) => {
+  try {
+    const enums = Capstone.schema.path('category').enumValues || [];
+    const raw = decodeURIComponent(req.params.category || '');
+    const matched = enums.find(e => e.toLowerCase() === raw.toLowerCase());
+    if (!matched) {
+      return res.status(400).json({ error: 'Kategori tidak valid', allowed: enums });
+    }
+
+    const status = req.query.status;
+    const page  = Math.max(parseInt(req.query.page || '1', 10), 1);
+    const limit = Math.max(parseInt(req.query.limit || '10', 10), 1);
+    const skip  = (page - 1) * limit;
+
+    const q = { category: matched };
+    if (!status || String(status).toLowerCase() !== 'all') q.status = 'Bisa dilanjutkan';
+
+    const [rows, total] = await Promise.all([
+      Capstone.find(q).skip(skip).limit(limit).lean(),
+      Capstone.countDocuments(q)
+    ]);
+
+    const data = rows.map(d => ({
+      id: String(d._id),
+      judul: d.title,
+      kategori: d.category,
+      tahun: d.year,
+      pemilikId: String(d.owner),
+      status: normalizeStatus(d.status)
+    }));
+
+    res.json({
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      count: data.length,
+      data
+    });
+  } catch (err) {
+    next(err);
   }
-
-  const status = req.query.status;
-  const page = Math.max(parseInt(req.query.page || '1', 10), 1);
-  const limit = Math.max(parseInt(req.query.limit || '10', 10), 1);
-  const skip = (page - 1) * limit;
-
-  let data = Store.capstones.filter(c => c.kategori === matched);
-  if (!status || String(status).toLowerCase() !== 'all') {
-    data = data.filter(c => c.status === Store.CAPSTONE_STATUS.BISA_DILANJUTKAN);
-  }
-
-  const sliced = data.slice(skip, skip + limit);
-  res.json({
-    meta: { page, limit, total: data.length, totalPages: Math.ceil(data.length / limit) },
-    count: sliced.length,
-    data: sliced
-  });
 };
