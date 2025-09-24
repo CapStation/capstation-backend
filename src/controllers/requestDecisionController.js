@@ -8,8 +8,11 @@ function enrichRequests(data, expandOrEmbed) {
       return {
         ...r,
         capstone: cap ? {
-          id: cap.id, judul: cap.judul, kategori: cap.kategori,
-          pemilikId: cap.pemilikId, status: cap.status
+          id: cap.id,
+          judul: cap.judul,
+          kategori: cap.kategori,
+          pemilikId: cap.pemilikId,
+          status: cap.status
         } : null
       };
     }
@@ -21,7 +24,7 @@ function enrichRequests(data, expandOrEmbed) {
   });
 }
 
-// Ajukan request kelanjutan.
+// POST /api/requests
 exports.createRequest = (req, res) => {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const { capstoneId, groupName, tahunPengajuan } = body;
@@ -57,8 +60,8 @@ exports.createRequest = (req, res) => {
   return res.status(201).json(reqObj);
 };
 
-// List request.
-// Filter: status, capstoneId, decider=me, decidedByUser, decidedByRole, onlyOwned=true, expand=capstone | embed=capstone
+// GET /api/requests
+// Filter: status, capstoneId, decider=me, decidedByUser, decidedByRole, onlyOwned=true, expand|embed=capstone
 exports.listRequests = (req, res) => {
   const { capstoneId, status, expand, decidedByRole, decidedByUser, decider, onlyOwned, embed } = req.query;
 
@@ -83,11 +86,15 @@ exports.listRequests = (req, res) => {
   return res.json({ count: out.length, data: out });
 };
 
-// Putuskan request oleh dosen atau pemilik.
+// PATCH /api/requests/:id/decide
 exports.decideRequest = (req, res) => {
   const { id } = req.params;
   const body = req.body && typeof req.body === 'object' ? req.body : {};
+
   const decision = body.decision || req.query.decision;
+  const override = String(body.override ?? req.query.override ?? 'false').toLowerCase() === 'true';
+  const reason = body.reason || req.query.reason || null;
+  const includeHistory = String(req.query.history || 'false').toLowerCase() === 'true';
 
   if (!decision) {
     return res.status(400).json({
@@ -106,7 +113,6 @@ exports.decideRequest = (req, res) => {
   const reqObj = Store.requests.find(r => r.id === id);
   if (!reqObj) return res.status(404).json({ error: 'Request tidak ditemukan' });
 
-  // Validasi pemilik. Dosen bebas.
   const capstone = Store.capstones.find(c => c.id === reqObj.capstoneId);
   if (!capstone) return res.status(404).json({ error: 'Capstone terkait tidak ditemukan' });
 
@@ -114,40 +120,46 @@ exports.decideRequest = (req, res) => {
     return res.status(403).json({ error: 'Anda bukan pemilik capstone ini, tidak boleh memutuskan' });
   }
 
-  const updated = Store.decideRequest(id, decision, req.user);
+  if (reqObj.status !== 'pending' && !override) {
+    return res.status(409).json({
+      error: 'Request sudah diputuskan. Gunakan override=true untuk mengubah keputusan',
+      currentStatus: reqObj.status,
+      example: { decision: 'accept', override: true, reason: 'Revisi setelah rapat' }
+    });
+  }
 
-  return res.json({
+  // KIRIMKAN reason ke store
+  const updated = Store.decideRequest(id, decision, req.user, reason);
+
+  const response = {
     ...updated,
     capstonePemilikId: capstone.pemilikId,
     capstoneJudul: capstone.judul
-  });
+  };
+  if (!includeHistory) delete response.history;
+
+  return res.json(response);
 };
 
-// Alias rapi: keputusan yang saya buat.
+// GET /api/requests/:id/history
+exports.getRequestHistory = (req, res) => {
+  const { id } = req.params;
+  const r = Store.requests.find(x => x.id === id);
+  if (!r) return res.status(404).json({ error: 'Request tidak ditemukan' });
+  return res.json({ id: r.id, history: Array.isArray(r.history) ? r.history : [] });
+};
+
+// GET /api/me/decisions?status=...
 exports.listMyDecisions = (req, res) => {
-  const status = req.query.status;
-  const expandOrEmbed = req.query.expand || req.query.embed;
-  let data = Store.requests.filter(r => r.decidedByUser === req.user.id);
-  if (status) data = data.filter(r => r.status === status);
-  const out = enrichRequests(data, expandOrEmbed);
-  res.json({ count: out.length, data: out });
+  req.query.decider = 'me';
+  return exports.listRequests(req, res);
 };
 
-// Alias rapi: semua request untuk capstone milik saya. Khusus pemilik.
+// GET /api/me/owner/requests?embed=capstone
 exports.listOwnedRequests = (req, res) => {
   if (req.user.role !== 'pemilik') {
     return res.status(403).json({ error: 'Hanya pemilik yang boleh mengakses' });
   }
-  const status = req.query.status;
-  const expandOrEmbed = req.query.expand || req.query.embed;
-
-  const ownedIds = Store.capstones
-    .filter(c => c.pemilikId === req.user.id)
-    .map(c => c.id);
-
-  let data = Store.requests.filter(r => ownedIds.includes(r.capstoneId));
-  if (status) data = data.filter(r => r.status === status);
-
-  const out = enrichRequests(data, expandOrEmbed);
-  res.json({ count: out.length, data: out });
+  req.query.onlyOwned = 'true';
+  return exports.listRequests(req, res);
 };
