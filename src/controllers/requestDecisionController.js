@@ -1,8 +1,6 @@
 const Capstone = require('../models/myCapstoneModel');
 const Request  = require('../models/myRequestModel');
 
-const isHexObjectId = (s) => typeof s === 'string' && /^[a-fA-F0-9]{24}$/.test(s);
-
 function shape(r, cap, embed) {
   const base = {
     id: String(r._id),
@@ -31,7 +29,9 @@ function shape(r, cap, embed) {
   return base;
 }
 
+// helper
 const lower = (v) => String(v || '').toLowerCase();
+const isHexObjectId = (s) => typeof s === 'string' && /^[a-fA-F0-9]{24}$/.test(s);
 
 // POST /api/requests
 exports.createRequest = async (req, res, next) => {
@@ -50,6 +50,9 @@ exports.createRequest = async (req, res, next) => {
       return res.status(400).json({ error: 'capstoneId tidak valid' });
     }
 
+    const nama = String(groupName).trim();
+    if (!nama) return res.status(400).json({ error: 'groupName tidak boleh kosong' });
+
     const cap = await Capstone.findById(capstoneId).lean();
     if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
     if (cap.status !== 'Bisa dilanjutkan') {
@@ -58,27 +61,25 @@ exports.createRequest = async (req, res, next) => {
 
     const dup = await Request.findOne({
       capstoneId,
-      groupName,
+      groupName: nama,
       tahunPengajuan: Number(tahunPengajuan)
     }).lean();
     if (dup) return res.status(409).json({ error: 'Request sudah ada' });
 
     const created = await Request.create({
       capstoneId,
-      groupName,
+      groupName: nama,
       tahunPengajuan: Number(tahunPengajuan),
       pemohonId: req.user?.id || 'u1'
     });
 
-    return res.status(201).json(shape(created, cap, false));
+    return res.status(201).json(shape(created.toObject(), cap, false));
   } catch (err) {
     next(err);
   }
 };
 
 // GET /api/requests
-// Filter: status, capstoneId, decidedByRole, decidedByUser, decider=me, onlyOwned=true
-// Embed: expand=capstone atau embed=capstone
 exports.listRequests = async (req, res, next) => {
   try {
     const { status, capstoneId, decidedByRole, decidedByUser, decider, onlyOwned } = req.query;
@@ -92,16 +93,22 @@ exports.listRequests = async (req, res, next) => {
     }
     if (decidedByRole) q.decidedByRole = decidedByRole;
     if (decidedByUser) q.decidedByUser = decidedByUser;
-    if (lower(decider) === 'me') q.decidedByUser = req.user?.id;
+
+    if (lower(decider) === 'me') {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ error: 'User tidak terdeteksi. Kirim header x-user-id dan x-role' });
+      }
+      q.decidedByUser = req.user.id;
+    }
 
     if (lower(onlyOwned) === 'true') {
-      let ownedIds = [];
-      if (req.user?.id) {
-        const all = await Capstone.find().select('_id owner').lean();
-        ownedIds = all
-          .filter(c => String(c.owner) === String(req.user.id))
-          .map(c => c._id);
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ error: 'User tidak terdeteksi. Kirim header x-user-id dan x-role' });
       }
+      const all = await Capstone.find().select('_id owner').lean();
+      const ownedIds = all
+        .filter(c => String(c.owner) === String(req.user.id))
+        .map(c => c._id);
       if (!ownedIds.length && !q.capstoneId) {
         return res.json({ count: 0, data: [] });
       }
@@ -123,12 +130,14 @@ exports.listRequests = async (req, res, next) => {
 };
 
 // PATCH /api/requests/:id/decide
-// Body: { decision, override?, reason? }, Query: history=true
 exports.decideRequest = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    if (!isHexObjectId(id)) {
+      return res.status(400).json({ error: 'id request tidak valid' });
+    }
 
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
     const decision = body.decision || req.query.decision;
     const override = lower(body.override ?? req.query.override ?? 'false') === 'true';
     const reason = body.reason || req.query.reason || null;
@@ -200,7 +209,11 @@ exports.decideRequest = async (req, res, next) => {
 // GET /api/requests/:id/history
 exports.getRequestHistory = async (req, res, next) => {
   try {
-    const r = await Request.findById(req.params.id).select('_id history').lean();
+    const { id } = req.params;
+    if (!isHexObjectId(id)) {
+      return res.status(400).json({ error: 'id request tidak valid' });
+    }
+    const r = await Request.findById(id).select('_id history').lean();
     if (!r) return res.status(404).json({ error: 'Request tidak ditemukan' });
     return res.json({ id: String(r._id), history: r.history || [] });
   } catch (err) {
@@ -208,24 +221,182 @@ exports.getRequestHistory = async (req, res, next) => {
   }
 };
 
-// GET /api/me/decisions
+// GET /api/me/decisions?status=&embed=capstone
 exports.listMyDecisions = async (req, res, next) => {
   try {
-    req.query.decider = 'me';
-    return exports.listRequests(req, res, next);
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User tidak terdeteksi. Kirim header x-user-id dan x-role' });
+    }
+    const status = String(req.query.status || '').trim();
+    const embedCap = String(req.query.embed || req.query.expand || '').toLowerCase() === 'capstone';
+
+    const q = { decidedByUser: req.user.id };
+    if (status) q.status = status;
+
+    const reqs = await Request.find(q).lean();
+
+    const capIds = [...new Set(reqs.map(r => String(r.capstoneId)))];
+    const caps = capIds.length
+      ? await Capstone.find({ _id: { $in: capIds } }).select('_id title owner status category').lean()
+      : [];
+    const capMap = new Map(caps.map(c => [String(c._id), c]));
+
+    const data = reqs.map(r => {
+      const cap = capMap.get(String(r.capstoneId));
+      const base = {
+        id: String(r._id),
+        capstoneId: String(r.capstoneId),
+        groupName: r.groupName,
+        tahunPengajuan: r.tahunPengajuan,
+        pemohonId: r.pemohonId,
+        status: r.status,
+        reason: r.reason || null,
+        decidedByRole: r.decidedByRole || null,
+        decidedByUser: r.decidedByUser || null,
+        decidedAt: r.decidedAt || null,
+      };
+      if (embedCap && cap) {
+        base.capstone = {
+          id: String(cap._id),
+          judul: cap.title,
+          kategori: cap.category,
+          pemilikId: String(cap.owner),
+          status: cap.status
+        };
+      } else if (cap) {
+        base.capstoneJudul = cap.title;
+        base.capstonePemilikId = String(cap.owner);
+      }
+      return base;
+    });
+
+    return res.json({ count: data.length, data });
   } catch (err) {
     next(err);
   }
 };
 
-// GET /api/me/owner/requests
+// GET /api/me/decisions/history?status=&embed=capstone
+exports.listMyDecisionHistory = async (req, res, next) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User tidak terdeteksi. Kirim header x-user-id dan x-role' });
+    }
+    const status = String(req.query.status || '').trim();
+    const embedCap = String(req.query.embed || req.query.expand || '').toLowerCase() === 'capstone';
+
+    const q = {
+      history: { $elemMatch: { byUser: req.user.id } }
+    };
+    if (status) q.status = status;
+
+    const reqs = await Request.find(q).lean();
+
+    const capIds = [...new Set(reqs.map(r => String(r.capstoneId)))];
+    const caps = capIds.length
+      ? await Capstone.find({ _id: { $in: capIds } }).select('_id title owner status category').lean()
+      : [];
+    const capMap = new Map(caps.map(c => [String(c._id), c]));
+
+    const data = reqs.map(r => {
+      const cap = capMap.get(String(r.capstoneId));
+      const myHistory = Array.isArray(r.history)
+        ? r.history
+            .filter(h => String(h.byUser) === String(req.user.id))
+            .sort((a, b) => new Date(b.at) - new Date(a.at))
+        : [];
+
+      const base = {
+        id: String(r._id),
+        capstoneId: String(r.capstoneId),
+        groupName: r.groupName,
+        tahunPengajuan: r.tahunPengajuan,
+        pemohonId: r.pemohonId,
+        status: r.status,
+        reason: r.reason || null,
+        decidedByRole: r.decidedByRole || null,
+        decidedByUser: r.decidedByUser || null,
+        decidedAt: r.decidedAt || null,
+        myLastDecision: myHistory[0] ? {
+          from: myHistory[0].from,
+          to: myHistory[0].to,
+          at: myHistory[0].at,
+          byRole: myHistory[0].byRole,
+          reason: myHistory[0].reason || null
+        } : null,
+        myDecisionsCount: myHistory.length
+      };
+
+      if (embedCap && cap) {
+        base.capstone = {
+          id: String(cap._id),
+          judul: cap.title,
+          kategori: cap.category,
+          pemilikId: String(cap.owner),
+          status: cap.status
+        };
+      } else if (cap) {
+        base.capstoneJudul = cap.title;
+        base.capstonePemilikId = String(cap.owner);
+      }
+      return base;
+    });
+
+    return res.json({ count: data.length, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/me/owner/requests?embed=capstone
 exports.listOwnedRequests = async (req, res, next) => {
   try {
-    if (req.user?.role !== 'pemilik') {
-      return res.status(403).json({ error: 'Hanya pemilik yang boleh mengakses' });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: "User tidak terdeteksi. Kirim header x-user-id dan x-role" });
     }
-    req.query.onlyOwned = 'true';
-    return exports.listRequests(req, res, next);
+    if (req.user.role !== "pemilik") {
+      return res.status(403).json({ error: "Hanya pemilik yang boleh mengakses" });
+    }
+
+    const owned = await Capstone.find({ owner: req.user.id }).select("_id title owner status category").lean();
+    if (!owned.length) return res.json({ count: 0, data: [] });
+
+    const ownedIds = owned.map(c => c._id);
+    const embed = String(req.query.embed || req.query.expand || "").toLowerCase() === "capstone";
+    const reqs = await Request.find({ capstoneId: { $in: ownedIds } }).lean();
+
+    const capMap = new Map(owned.map(c => [String(c._id), c]));
+
+    const data = reqs.map(r => {
+      const cap = capMap.get(String(r.capstoneId));
+      const base = {
+        id: String(r._id),
+        capstoneId: String(r.capstoneId),
+        groupName: r.groupName,
+        tahunPengajuan: r.tahunPengajuan,
+        pemohonId: r.pemohonId,
+        status: r.status,
+        reason: r.reason || null,
+        decidedByRole: r.decidedByRole || null,
+        decidedByUser: r.decidedByUser || null,
+        decidedAt: r.decidedAt || null,
+      };
+      if (embed && cap) {
+        base.capstone = {
+          id: String(cap._id),
+          judul: cap.title,
+          kategori: cap.category,
+          pemilikId: String(cap.owner),
+          status: cap.status,
+        };
+      } else if (cap) {
+        base.capstoneJudul = cap.title;
+        base.capstonePemilikId = String(cap.owner);
+      }
+      return base;
+    });
+
+    return res.json({ count: data.length, data });
   } catch (err) {
     next(err);
   }
