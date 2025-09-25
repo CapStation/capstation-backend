@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const capstoneController = require('../controllers/capstoneController');
+
 const { authMiddleware, requireRole } = require('../middlewares/authMiddleware');
 
 // Get all capstones with optional filtering
@@ -14,5 +15,9 @@ router.get('/:id', authMiddleware, capstoneController.getCapstoneById);
 
 // Update status capstone - hanya owner yang bisa mengubah
 router.patch('/:id/status', authMiddleware, capstoneController.updateCapstoneStatus);
+
+const { authMiddleware } = require('../middlewares/authMiddleware');
+
+router.get('/:id', authMiddleware, capstoneController.getCapstoneById);
 
 module.exports = router;
