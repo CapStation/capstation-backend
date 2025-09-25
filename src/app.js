@@ -62,7 +62,7 @@ let useMock = false;
 try {
   passport = require("passport");
   try {
-    require("./configs/passport")();        // kalau file config ada
+    require("./configs/passport")();
     app.use(passport.initialize());
   } catch (e) {
     console.warn("Passport config not loaded:", e.message);
