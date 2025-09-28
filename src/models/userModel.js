@@ -1,3 +1,4 @@
+
 // const mongoose = require('mongoose');
 
 // const userSchema = new mongoose.Schema({
@@ -11,6 +12,7 @@
 // });
 
 // module.exports = mongoose.model('User', userSchema);
+
 
 const mongoose = require('mongoose');
 
@@ -27,6 +29,18 @@ const userSchema = new mongoose.Schema({
   resetTokenExpires: { type: Date, default: null },
   verifyToken: { type: String, default: null },
   verifyTokenExpires: { type: Date, default: null }
+  competencies: [{
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Competency',
+    validate: {
+      validator: function(arr) {
+        return arr.length <= 20;
+      },
+      message: 'Maksimal 20 kompetensi yang dapat ditambahkan'
+    }
+  }]
 }, { timestamps: true });
+
+userSchema.index({ competencies: 1 });
 
 module.exports = mongoose.model('User', userSchema);
