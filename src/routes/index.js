@@ -3,6 +3,9 @@ const authRoutes = require('./authRoutes');
 const projectRoutes = require('./projects');
 const oauthRoutes = require('./oauthRoutes');
 const documentRoutes = require('./documents');
+const requestDecisionRoutes = require('./requestDecisionRoutes');
+const capstoneBrowseRoutes = require('./capstoneBrowseRoutes');
+
 const router = express.Router();
 
 router.get('/health', (req, res) => {
@@ -14,9 +17,11 @@ router.get('/health', (req, res) => {
   });
 });
 
-router.use("/auth", authRoutes);
-router.use("/auth/oauth", oauthRoutes);
-router.use("/projects", projectRoutes);
+router.use('/auth', authRoutes);
+router.use('/auth/oauth', oauthRoutes);
+router.use('/projects', projectRoutes);
 router.use('/documents', documentRoutes);
+router.use(requestDecisionRoutes);            
+router.use('/browse', capstoneBrowseRoutes);  
 
 module.exports = router;
