@@ -18,7 +18,6 @@ class ProjectController {
   async createProject(req, res) {
     try {
       const projectData = req.body;
-      // Get user ID from auth middleware (real auth system)
       const userId = req.user?._id;
       
       if (!userId) {
@@ -29,11 +28,40 @@ class ProjectController {
         });
       }
 
+      // Validate required fields for new workflow
+      if (!projectData.group) {
+        return res.status(400).json({
+          success: false,
+          message: 'Group ID harus dipilih untuk membuat project',
+          data: null
+        });
+      }
+
+      // Check if user owns the group
+      const Group = require('../models/groupModel');
+      const group = await Group.findById(projectData.group);
+      
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Group tidak ditemukan',
+          data: null
+        });
+      }
+
+      if (!group.isOwner(userId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Hanya owner group yang bisa membuat project',
+          data: null
+        });
+      }
+
       const newProject = await this.projectService.createProject(projectData, userId);
 
       res.status(201).json({
         success: true,
-        message: 'Project berhasil dibuat',
+        message: 'Project berhasil dibuat dengan data group otomatis',
         data: newProject
       });
     } catch (error) {

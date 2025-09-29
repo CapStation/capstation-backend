@@ -1,6 +1,8 @@
 const express = require('express');
 const ProjectController = require('../controllers/ProjectController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
+const { requireRole, requireOwnershipOrRole } = require('../middlewares/roleMiddleware');
+const Project = require('../models/Project');
 
 const router = express.Router();
 const projectController = new ProjectController().bind();
@@ -25,10 +27,19 @@ router.get('/:id', projectController.getProjectById);
 // Other protected routes (auth required)
 router.use(authMiddleware); // Apply auth middleware to all routes below
 
-router.post('/', projectController.createProject);
-router.get('/:id/documents', projectController.getProjectDocuments);
-router.put('/:id', projectController.updateProject);
-router.patch('/:id/status', projectController.updateProjectStatus);
-router.delete('/:id', projectController.deleteProject);
+// Create project (mahasiswa, dosen, admin can create)
+router.post('/', requireRole('mahasiswa', 'dosen', 'admin'), projectController.createProject);
+
+// Get project documents (members, supervisor, admin can view)
+router.get('/:id/documents', requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.getProjectDocuments);
+
+// Update project (owner/members, supervisor, admin can edit)
+router.put('/:id', requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.updateProject);
+
+// Update project status (owner/members, supervisor, admin can update status)
+router.patch('/:id/status', requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.updateProjectStatus);
+
+// Delete project (only owner/members or admin can delete)
+router.delete('/:id', requireOwnershipOrRole(Project, 'members', 'id', 'admin'), projectController.deleteProject);
 
 module.exports = router;

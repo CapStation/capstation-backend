@@ -1,4 +1,4 @@
-const Capstone = require('../models/myCapstoneModel');
+const Project = require('../models/Project');
 const Request  = require('../models/myRequestModel');
 
 function shape(r, cap, embed) {
@@ -18,9 +18,9 @@ function shape(r, cap, embed) {
     base.capstone = {
       id: String(cap._id),
       judul: cap.title,
-      kategori: cap.category,
+      kategori: cap.tema, // tema from Project model
       pemilikId: String(cap.owner),
-      status: cap.status
+      status: cap.capstoneStatus // capstoneStatus from Project model
     };
   } else if (cap) {
     base.capstonePemilikId = String(cap.owner);
@@ -53,10 +53,10 @@ exports.createRequest = async (req, res, next) => {
     const nama = String(groupName).trim();
     if (!nama) return res.status(400).json({ error: 'groupName tidak boleh kosong' });
 
-    const cap = await Capstone.findById(capstoneId).lean();
+    const cap = await Project.findById(capstoneId).lean();
     if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
-    if (cap.status !== 'Bisa dilanjutkan') {
-      return res.status(400).json({ error: 'Capstone tidak berstatus Bisa dilanjutkan' });
+    if (cap.capstoneStatus !== 'accepted') {
+      return res.status(400).json({ error: 'Capstone tidak berstatus accepted' });
     }
 
     const dup = await Request.findOne({
@@ -105,7 +105,7 @@ exports.listRequests = async (req, res, next) => {
       if (!req.user || !req.user.id) {
         return res.status(401).json({ error: 'User tidak terdeteksi. Kirim header x-user-id dan x-role' });
       }
-      const all = await Capstone.find().select('_id owner').lean();
+      const all = await Project.find().select('_id owner').lean();
       const ownedIds = all
         .filter(c => String(c.owner) === String(req.user.id))
         .map(c => c._id);
@@ -118,7 +118,7 @@ exports.listRequests = async (req, res, next) => {
     const reqs = await Request.find(q).lean();
     const capIds = [...new Set(reqs.map(r => String(r.capstoneId)))];
     const caps = capIds.length
-      ? await Capstone.find({ _id: { $in: capIds } }).select('_id title owner status category').lean()
+      ? await Project.find({ _id: { $in: capIds } }).select('_id title owner capstoneStatus tema').lean()
       : [];
     const capMap = new Map(caps.map(c => [String(c._id), c]));
 
@@ -160,7 +160,7 @@ exports.decideRequest = async (req, res, next) => {
     const r = await Request.findById(id);
     if (!r) return res.status(404).json({ error: 'Request tidak ditemukan' });
 
-    const cap = await Capstone.findById(r.capstoneId).select('_id title owner status').lean();
+    const cap = await Project.findById(r.capstoneId).select('_id title owner capstoneStatus').lean();
     if (!cap) return res.status(404).json({ error: 'Capstone terkait tidak ditemukan' });
 
     if (req.user.role === 'pemilik' && String(cap.owner) !== String(req.user.id)) {
@@ -237,7 +237,7 @@ exports.listMyDecisions = async (req, res, next) => {
 
     const capIds = [...new Set(reqs.map(r => String(r.capstoneId)))];
     const caps = capIds.length
-      ? await Capstone.find({ _id: { $in: capIds } }).select('_id title owner status category').lean()
+      ? await Project.find({ _id: { $in: capIds } }).select('_id title owner capstoneStatus tema').lean()
       : [];
     const capMap = new Map(caps.map(c => [String(c._id), c]));
 
@@ -259,9 +259,9 @@ exports.listMyDecisions = async (req, res, next) => {
         base.capstone = {
           id: String(cap._id),
           judul: cap.title,
-          kategori: cap.category,
+          kategori: cap.tema,
           pemilikId: String(cap.owner),
-          status: cap.status
+          status: cap.capstoneStatus
         };
       } else if (cap) {
         base.capstoneJudul = cap.title;
@@ -294,7 +294,7 @@ exports.listMyDecisionHistory = async (req, res, next) => {
 
     const capIds = [...new Set(reqs.map(r => String(r.capstoneId)))];
     const caps = capIds.length
-      ? await Capstone.find({ _id: { $in: capIds } }).select('_id title owner status category').lean()
+      ? await Project.find({ _id: { $in: capIds } }).select('_id title owner capstoneStatus tema').lean()
       : [];
     const capMap = new Map(caps.map(c => [String(c._id), c]));
 
@@ -331,9 +331,9 @@ exports.listMyDecisionHistory = async (req, res, next) => {
         base.capstone = {
           id: String(cap._id),
           judul: cap.title,
-          kategori: cap.category,
+          kategori: cap.tema,
           pemilikId: String(cap.owner),
-          status: cap.status
+          status: cap.capstoneStatus
         };
       } else if (cap) {
         base.capstoneJudul = cap.title;
@@ -358,7 +358,7 @@ exports.listOwnedRequests = async (req, res, next) => {
       return res.status(403).json({ error: "Hanya pemilik yang boleh mengakses" });
     }
 
-    const owned = await Capstone.find({ owner: req.user.id }).select("_id title owner status category").lean();
+    const owned = await Project.find({ owner: req.user.id }).select("_id title owner capstoneStatus tema").lean();
     if (!owned.length) return res.json({ count: 0, data: [] });
 
     const ownedIds = owned.map(c => c._id);
@@ -385,9 +385,9 @@ exports.listOwnedRequests = async (req, res, next) => {
         base.capstone = {
           id: String(cap._id),
           judul: cap.title,
-          kategori: cap.category,
+          kategori: cap.tema,
           pemilikId: String(cap.owner),
-          status: cap.status,
+          status: cap.capstoneStatus,
         };
       } else if (cap) {
         base.capstoneJudul = cap.title;
