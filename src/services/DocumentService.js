@@ -164,17 +164,29 @@ class DocumentService {
         project: projectId
       } = documentData;
 
-      // Validasi user (skipped for testing)
-      // const user = await User.findById(userId);
-      // if (!user) {
-      //   throw new Error('User tidak ditemukan');
-      // }
-
       // Validasi project
       const project = await Project.findById(projectId);
       if (!project) {
         throw new Error('Project tidak ditemukan');
       }
+
+      // Check authorization: Only owner and members can upload documents to this project
+      const userIdString = userId.toString();
+      const ownerIdString = project.owner.toString();
+      const memberIdStrings = project.members.map(m => m.toString());
+      
+      const isOwner = userIdString === ownerIdString;
+      const isMember = memberIdStrings.includes(userIdString);
+      
+      // Check if user is admin
+      const user = await User.findById(userId);
+      const isAdmin = user && user.role === 'admin';
+      
+      if (!isOwner && !isMember && !isAdmin) {
+        throw new Error('Tidak memiliki izin untuk mengunggah dokumen ke project ini. Hanya owner dan members project yang diizinkan.');
+      }
+
+      console.log(`✅ Authorization check passed: isOwner=${isOwner}, isMember=${isMember}, isAdmin=${isAdmin}`);
 
       // Process file - check if it should use GridFS for large files
       const fileSize = fileBuffer.length;
@@ -545,21 +557,34 @@ class DocumentService {
    */
   async updateDocument(documentId, updateData, userId) {
     try {
-      const document = await this.model.findById(documentId);
+      const document = await this.model.findById(documentId).populate('project');
       if (!document) {
         throw new Error('Dokumen tidak ditemukan');
       }
 
-      // Check permission (only uploader or admin can update)
-      // Skip permission check if uploadedBy is null (for testing/seeded data)
-      if (document.uploadedBy && document.uploadedBy.toString() !== userId) {
-        // Check if user is admin
-        const user = await User.findById(userId);
-        if (!user || user.role !== 'admin') {
-          throw new Error('Tidak memiliki izin untuk mengupdate dokumen ini');
-        }
-        console.log('✅ Admin access granted for document update');
+      // Check authorization: Only project owner, members, or admin can update
+      const userIdString = userId.toString();
+      const project = document.project;
+      
+      if (!project) {
+        throw new Error('Project terkait dokumen tidak ditemukan');
       }
+      
+      const ownerIdString = project.owner.toString();
+      const memberIdStrings = project.members.map(m => m.toString());
+      
+      const isOwner = userIdString === ownerIdString;
+      const isMember = memberIdStrings.includes(userIdString);
+      
+      // Check if user is admin
+      const user = await User.findById(userId);
+      const isAdmin = user && user.role === 'admin';
+      
+      if (!isOwner && !isMember && !isAdmin) {
+        throw new Error('Tidak memiliki izin untuk mengupdate dokumen ini. Hanya owner dan members project yang diizinkan.');
+      }
+
+      console.log(`✅ Update authorization check passed: isOwner=${isOwner}, isMember=${isMember}, isAdmin=${isAdmin}`);
 
       // Only allow updating metadata (add isPublic for admin control)
       const allowedFields = ['title', 'description', 'tags', 'isPublic'];
@@ -598,18 +623,34 @@ class DocumentService {
    */
   async replaceDocumentFile(documentId, fileBuffer, fileInfo, userId) {
     try {
-      const document = await this.model.findById(documentId);
+      const document = await this.model.findById(documentId).populate('project');
       if (!document) {
         throw new Error('Dokumen tidak ditemukan');
       }
 
-      // Check permission
-      if (document.uploadedBy.toString() !== userId) {
-        const user = await User.findById(userId);
-        if (!user || user.role !== 'admin') {
-          throw new Error('Tidak memiliki izin untuk mengganti file dokumen ini');
-        }
+      // Check authorization: Only project owner, members, or admin can replace file
+      const userIdString = userId.toString();
+      const project = document.project;
+      
+      if (!project) {
+        throw new Error('Project terkait dokumen tidak ditemukan');
       }
+      
+      const ownerIdString = project.owner.toString();
+      const memberIdStrings = project.members.map(m => m.toString());
+      
+      const isOwner = userIdString === ownerIdString;
+      const isMember = memberIdStrings.includes(userIdString);
+      
+      // Check if user is admin
+      const user = await User.findById(userId);
+      const isAdmin = user && user.role === 'admin';
+      
+      if (!isOwner && !isMember && !isAdmin) {
+        throw new Error('Tidak memiliki izin untuk mengganti file dokumen ini. Hanya owner dan members project yang diizinkan.');
+      }
+
+      console.log(`✅ Replace file authorization check passed: isOwner=${isOwner}, isMember=${isMember}, isAdmin=${isAdmin}`);
 
       // Process new file
       const processedFile = await this.base64Service.processFileForUpload(fileBuffer, {
@@ -648,18 +689,34 @@ class DocumentService {
    */
   async deleteDocument(documentId, userId) {
     try {
-      const document = await this.model.findById(documentId);
+      const document = await this.model.findById(documentId).populate('project');
       if (!document) {
         throw new Error('Dokumen tidak ditemukan');
       }
 
-      // Check permission - skip permission check if uploadedBy is null (for testing/seeded data)
-      if (document.uploadedBy && document.uploadedBy.toString() !== userId) {
-        const user = await User.findById(userId);
-        if (!user || user.role !== 'admin') {
-          throw new Error('Tidak memiliki izin untuk menghapus dokumen ini');
-        }
+      // Check authorization: Only project owner, members, or admin can delete
+      const userIdString = userId.toString();
+      const project = document.project;
+      
+      if (!project) {
+        throw new Error('Project terkait dokumen tidak ditemukan');
       }
+      
+      const ownerIdString = project.owner.toString();
+      const memberIdStrings = project.members.map(m => m.toString());
+      
+      const isOwner = userIdString === ownerIdString;
+      const isMember = memberIdStrings.includes(userIdString);
+      
+      // Check if user is admin
+      const user = await User.findById(userId);
+      const isAdmin = user && user.role === 'admin';
+      
+      if (!isOwner && !isMember && !isAdmin) {
+        throw new Error('Tidak memiliki izin untuk menghapus dokumen ini. Hanya owner dan members project yang diizinkan.');
+      }
+
+      console.log(`✅ Delete authorization check passed: isOwner=${isOwner}, isMember=${isMember}, isAdmin=${isAdmin}`);
 
       // Soft delete
       await this.model.findByIdAndUpdate(documentId, {
