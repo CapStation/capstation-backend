@@ -1,5 +1,5 @@
 const Project = require('../models/Project');
-const User = require('../models/userModel'); // Use real auth system
+const User = require('../models/userModel');
 const { formatProjectForResponse } = require('../utils/responseFormatter');
 const { getValidThemes } = require('../configs/themes');
 
@@ -26,11 +26,17 @@ class ProjectService {
         throw new Error('Owner tidak ditemukan');
       }
 
-      // Set group sama dengan owner ID
+      // Ensure members array includes the owner
+      const members = projectData.members || [ownerId];
+      if (!members.includes(ownerId)) {
+        members.push(ownerId);
+      }
+
+      // Create project with owner and members
       const newProject = new this.model({
         ...projectData,
         owner: ownerId,
-        group: ownerId  // Group ID sama dengan owner ID
+        members: members // Ensure members includes owner
       });
 
       const savedProject = await newProject.save();
@@ -83,9 +89,9 @@ class ProjectService {
         query.tema = tema;
       }
 
-      // Filter berdasarkan category (legacy support)
+      // Filter berdasarkan category
       if (category && !tema) {
-        query.tema = category; // Map category to tema for backwards compatibility
+        query.tema = category; 
       }
 
       // Filter berdasarkan capstone type
@@ -172,25 +178,25 @@ class ProjectService {
   }
 
   /**
-   * Mendapatkan project berdasarkan kategori tertentu
-   * @param {String} category - Kategori project
+   * Mendapatkan project berdasarkan tema tertentu
+   * @param {String} tema - Tema project  
    * @param {Object} options - Additional options
    * @returns {Promise<Array>} Array project
    */
-  async getProjectsByCategory(category, options = {}) {
+  async getProjectsByCategory(tema, options = {}) {
     try {
-      const validCategories = getValidThemes();
+      const validThemes = getValidThemes();
 
-      if (!validCategories.includes(category)) {
-        throw new Error('Kategori tidak valid');
+      if (!validThemes.includes(tema)) {
+        throw new Error('Tema tidak valid');
       }
 
       return await this.getProjectsByFilter({
-        category,
+        tema,
         ...options
       });
     } catch (error) {
-      throw new Error(`Gagal mengambil project berdasarkan kategori: ${error.message}`);
+      throw new Error(`Gagal mengambil project berdasarkan tema: ${error.message}`);
     }
   }
 
@@ -218,7 +224,7 @@ class ProjectService {
   }
 
   /**
-   * Mendapatkan project capstone 1 yang tersedia
+   * Mendapatkan project capstone 1 yang tersedia  
    * @param {Object} filters - Additional filters
    * @returns {Promise<Object>} Capstone 1 projects
    */
@@ -226,7 +232,7 @@ class ProjectService {
     try {
       return await this.getProjectsByFilter({
         capstoneType: 'capstone1',
-        status: 'bisa_dilanjutkan',
+        capstoneStatus: 'accepted',
         ...filters
       });
     } catch (error) {
@@ -242,8 +248,8 @@ class ProjectService {
   async getCapstone2Projects(filters = {}) {
     try {
       return await this.getProjectsByFilter({
-        capstoneType: 'capstone2',
-        status: 'bisa_dilanjutkan',
+        capstoneType: 'capstone2', 
+        capstoneStatus: 'accepted',
         ...filters
       });
     } catch (error) {
@@ -253,32 +259,32 @@ class ProjectService {
 
   /**
    * Mendapatkan project berdasarkan kategori dan tipe capstone
-   * @param {String} category - Kategori project
+   * @param {String} tema - Tema project
    * @param {String} capstoneType - Tipe capstone
    * @param {Object} options - Additional options
    * @returns {Promise<Object>} Filtered projects
    */
-  async getProjectsByCategoryAndCapstone(category, capstoneType, options = {}) {
+  async getProjectsByCategoryAndCapstone(tema, capstoneType, options = {}) {
     try {
       return await this.getProjectsByFilter({
-        category,
+        tema,
         capstoneType,
         ...options
       });
     } catch (error) {
-      throw new Error(`Gagal mengambil project berdasarkan kategori dan capstone: ${error.message}`);
+      throw new Error(`Gagal mengambil project berdasarkan tema dan capstone: ${error.message}`);
     }
   }
 
   /**
-   * Mendapatkan project yang bisa dilanjutkan
+   * Mendapatkan project yang bisa dilanjutkan (untuk capstone yang accepted)
    * @param {Object} filters - Additional filters
    * @returns {Promise<Object>} Available projects dengan pagination
    */
   async getAvailableProjects(filters = {}) {
     try {
       return await this.getProjectsByFilter({
-        status: 'bisa_dilanjutkan',
+        capstoneStatus: 'accepted',
         ...filters
       });
     } catch (error) {
@@ -296,7 +302,8 @@ class ProjectService {
       const project = await this.model
         .findById(projectId)
         .populate('owner', 'name email')
-        .populate('group', 'name email')
+        .populate('supervisor', 'name email')
+        .populate('members', 'name email')
         .populate('documents');
 
       if (!project) {
@@ -326,14 +333,22 @@ class ProjectService {
         throw new Error('Project tidak ditemukan');
       }
 
-      // Permission check with null safety
-      if (project.owner && project.owner.toString() !== userId.toString()) {
+      // Permission check with null safety - include members check
+      const userIdString = userId.toString();
+      const isOwner = project.owner && project.owner.toString() === userIdString;
+      const isMember = project.members && project.members.some(memberId => memberId.toString() === userIdString);
+      
+      if (!isOwner && !isMember) {
         // Check if user is admin or dosen (using real auth system)
         const user = await User.findById(userId);
         if (!user || (user.role !== 'admin' && user.role !== 'dosen')) {
-          throw new Error('Tidak memiliki izin untuk mengupdate project ini');
+          throw new Error('Tidak memiliki izin untuk mengupdate project ini. Hanya owner, members, admin, atau dosen yang diizinkan.');
         }
         console.log('✅ Admin/Dosen access granted for project update');
+      } else if (isOwner) {
+        console.log('✅ Owner access granted for project update');
+      } else if (isMember) {
+        console.log('✅ Member access granted for project update');
       }
 
       // Update project
@@ -348,7 +363,7 @@ class ProjectService {
   }
 
   /**
-   * Update status project (bisa_dilanjutkan/ditutup)
+   * Update status project (untuk capstone: pending/accepted/rejected, untuk regular: active/completed/suspended/deactive)
    * @param {String} projectId - ID project
    * @param {String} status - Status baru
    * @param {String} userId - ID user yang melakukan update
@@ -356,12 +371,20 @@ class ProjectService {
    */
   async updateProjectStatus(projectId, status, userId) {
     try {
-      const validStatuses = ['bisa_dilanjutkan', 'ditutup'];
-      if (!validStatuses.includes(status)) {
-        throw new Error('Status tidak valid');
+      const project = await this.model.findById(projectId);
+      if (!project) {
+        throw new Error('Project tidak ditemukan');
       }
 
-      return await this.updateProject(projectId, { status }, userId);
+      let updateData = {};
+      // For capstone projects, update capstoneStatus
+      const validCapstoneStatuses = ['pending', 'accepted', 'rejected'];
+      if (!validCapstoneStatuses.includes(status)) {
+        throw new Error('Status capstone tidak valid. Harus pending, accepted, atau rejected');
+      }
+      updateData.capstoneStatus = status;
+
+      return await this.updateProject(projectId, updateData, userId);
     } catch (error) {
       throw new Error(`Gagal update status project: ${error.message}`);
     }
@@ -412,7 +435,8 @@ class ProjectService {
       const projects = await this.model
         .find(query)
         .populate('owner', 'name email')
-        .populate('group', 'name email')
+        .populate('supervisor', 'name email')
+        .populate('members', 'name email')
         .populate('documents', 'title filename fileSize mimeType createdAt')
         .sort({ createdAt: -1 });
 
@@ -423,7 +447,7 @@ class ProjectService {
   }
 
   /**
-   * Mendapatkan statistik project berdasarkan kategori
+   * Mendapatkan statistik project berdasarkan tema
    * @returns {Promise<Object>} Statistics data
    */
   async getProjectStatistics() {
@@ -432,19 +456,19 @@ class ProjectService {
         { $match: { isActive: true } },
         {
           $group: {
-            _id: '$category',
+            _id: '$tema',
             count: { $sum: 1 },
             availableCount: {
-              $sum: { $cond: [{ $eq: ['$status', 'bisa_dilanjutkan'] }, 1, 0] }
+              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'accepted'] }, 1, 0] }
             },
             closedCount: {
-              $sum: { $cond: [{ $eq: ['$status', 'ditutup'] }, 1, 0] }
+              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'rejected'] }, 1, 0] }
             }
           }
         },
         {
           $project: {
-            category: '$_id',
+            tema: '$_id',
             total: '$count',
             available: '$availableCount',
             closed: '$closedCount',
@@ -461,17 +485,17 @@ class ProjectService {
             _id: null,
             totalProjects: { $sum: 1 },
             availableProjects: {
-              $sum: { $cond: [{ $eq: ['$status', 'bisa_dilanjutkan'] }, 1, 0] }
+              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'accepted'] }, 1, 0] }
             },
             closedProjects: {
-              $sum: { $cond: [{ $eq: ['$status', 'ditutup'] }, 1, 0] }
+              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'rejected'] }, 1, 0] }
             }
           }
         }
       ]);
 
       return {
-        categoryStats: stats,
+        temaStats: stats,
         totalStats: totalStats[0] || {
           totalProjects: 0,
           availableProjects: 0,
@@ -492,7 +516,7 @@ class ProjectService {
     try {
       const {
         keyword,
-        categories = [],
+        temas = [],
         statuses = [],
         academicYears = [],
         tags = [],
@@ -514,9 +538,9 @@ class ProjectService {
         ];
       }
 
-      // Categories filter
-      if (categories.length > 0) {
-        query.category = { $in: categories };
+      // Temas filter
+      if (temas.length > 0) {
+        query.tema = { $in: temas };
       }
 
       // Status filter
@@ -555,7 +579,8 @@ class ProjectService {
       const projects = await this.model
         .find(query)
         .populate('owner', 'name email')
-        .populate('group', 'name email')
+        .populate('supervisor', 'name email')
+        .populate('members', 'name email')
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit));

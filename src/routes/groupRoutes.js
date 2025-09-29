@@ -1,9 +1,18 @@
 const express = require('express');
-const router = express.Router();
-const { getAllGroups, getGroupDetail } = require('../controllers/groupController');
+const GroupController = require('../controllers/groupController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
-router.get('/', authMiddleware, getAllGroups); // melihat semua grup
-router.get('/:id', authMiddleware, getGroupDetail); // melihat detail salah satu grup
+const router = express.Router();
+const groupController = new GroupController();
+
+// Public routes
+router.get('/', groupController.getAllGroups.bind(groupController));
+
+// Protected routes (require auth)
+router.use(authMiddleware);
+
+router.post('/', groupController.createGroup.bind(groupController));
+router.get('/my', groupController.getMyGroup.bind(groupController));
+router.put('/:groupId', groupController.updateGroup.bind(groupController));
 
 module.exports = router;

@@ -14,7 +14,6 @@ const projectSchema = new mongoose.Schema({
     maxlength: [2000, 'Deskripsi tidak boleh lebih dari 2000 karakter']
   },
   
-  // Tema project untuk filtering (4 tema sesuai spesifikasi)
   tema: {
     type: String,
     required: [true, 'Tema project harus dipilih'],
@@ -25,12 +24,19 @@ const projectSchema = new mongoose.Schema({
     index: true
   },
   
-  // Status project
   status: {
     type: String,
     enum: ['active', 'completed', 'suspended', 'deactive'],
     default: 'active'
   },
+  
+  capstoneStatus: {
+    type: String,
+    enum: ['pending', 'accepted', 'rejected'],
+    default: 'pending',
+    required: [true, 'Status capstone harus diisi']
+  },
+  
   academicYear: {
     type: String,
     required: [true, 'Tahun ajaran harus diisi'],
@@ -43,13 +49,45 @@ const projectSchema = new mongoose.Schema({
   },
   group: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Grup project harus ada']
+    ref: 'Group',
+    required: [true, 'Group project harus ada']
   },
+  supervisor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Supervisor (dosen pembimbing) harus ada'],
+    validate: {
+      validator: async function(supervisorId) {
+        const User = mongoose.model('User');
+        const supervisor = await User.findById(supervisorId);
+        return supervisor && supervisor.role === 'dosen';
+      },
+      message: 'Supervisor harus seorang dosen'
+    }
+  },
+  members: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  }],
   documents: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Document'
   }],
+  
+  // Continuation requests for project handover
+  continuationRequests: [{
+    requester: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    status: {
+      type: String,
+      enum: ['pending', 'accepted', 'rejected'],
+      default: 'pending'
+    },
+    requestDate: { type: Date, default: Date.now },
+    responseDate: Date,
+    notes: String
+  }],
+  
   tags: [{
     type: String,
     trim: true
@@ -62,7 +100,7 @@ const projectSchema = new mongoose.Schema({
   timestamps: {
     currentTime: () => {
       const now = new Date();
-      const jakartaOffset = 7 * 60; // UTC+7 in minutes
+      const jakartaOffset = 7 * 60;
       const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
       return new Date(utc + (jakartaOffset * 60000));
     }
@@ -71,9 +109,9 @@ const projectSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-projectSchema.index({ category: 1, status: 1 });
-projectSchema.index({ capstoneType: 1, status: 1 });
-projectSchema.index({ category: 1, capstoneType: 1 });
+projectSchema.index({ tema: 1, status: 1 });
+projectSchema.index({ academicYear: 1, status: 1 });
+projectSchema.index({ tema: 1, academicYear: 1 });
 projectSchema.index({ academicYear: 1 });
 projectSchema.index({ owner: 1 });
 projectSchema.index({ title: 'text', description: 'text' });
@@ -82,11 +120,43 @@ projectSchema.virtual('documentCount').get(function() {
   return this.documents ? this.documents.length : 0;
 });
 
-// Middleware untuk update timestamp
-projectSchema.pre('save', function(next) {
+// Middleware untuk update timestamp dan auto-assign group data
+projectSchema.pre('save', async function(next) {
   if (this.isModified() && !this.isNew) {
     this.updatedAt = Date.now();
   }
+  
+  // Auto-assign group owner dan members jika group sudah dipilih
+  if (this.group && this.isNew) {
+    try {
+      const Group = mongoose.model('Group');
+      const group = await Group.findById(this.group);
+      
+      if (group) {
+        // Set owner dari group owner
+        this.owner = group.owner;
+        
+        // Set members dari group members
+        this.members = [...group.members];
+        
+        // Add project reference ke group
+        group.projects.push(this._id);
+        await group.save();
+      }
+    } catch (error) {
+      return next(error);
+    }
+  }
+  
+  // Ensure owner is always included in members
+  if (this.owner && this.members) {
+    const ownerIdString = this.owner.toString();
+    const memberIdStrings = this.members.map(m => m.toString());
+    if (!memberIdStrings.includes(ownerIdString)) {
+      this.members.push(this.owner);
+    }
+  }
+  
   next();
 });
 
