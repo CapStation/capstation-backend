@@ -1,11 +1,12 @@
-const Capstone = require('../models/capstoneModel');
+const Project = require('../models/Project');
 
 // Detail capstone
 exports.getCapstoneById = async (req, res, next) => {
   try {
-    const capstone = await Capstone.findById(req.params.id)
+    const capstone = await Project.findById(req.params.id)
       .populate('owner', 'name email role')
-      .populate('members', 'name email role');
+      .populate('members', 'name email role')
+      .populate('supervisor', 'name email role');
 
     if (!capstone) return res.status(404).json({ message: 'Capstone not found' });
     res.json(capstone);
@@ -21,15 +22,15 @@ exports.updateCapstoneStatus = async (req, res, next) => {
     const { status } = req.body;
 
     // Validasi status yang diizinkan
-    const allowedStatuses = ['Menunggu', 'Bisa dilanjutkan', 'Ditutup'];
+    const allowedStatuses = ['pending', 'accepted', 'rejected'];
     if (!status || !allowedStatuses.includes(status)) {
       return res.status(400).json({ 
-        message: 'Status tidak valid. Status harus salah satu dari: Menunggu, Bisa dilanjutkan, Ditutup' 
+        message: 'Status tidak valid. Status harus salah satu dari: pending, accepted, rejected' 
       });
     }
 
     // Cari capstone
-    const capstone = await Capstone.findById(id);
+    const capstone = await Project.findById(id);
     if (!capstone) {
       return res.status(404).json({ message: 'Capstone tidak ditemukan' });
     }
@@ -41,14 +42,15 @@ exports.updateCapstoneStatus = async (req, res, next) => {
       });
     }
 
-    // Update status
-    capstone.status = status;
+    // Update capstone status (bukan general status)
+    capstone.capstoneStatus = status;
     await capstone.save();
 
     // Return updated capstone with populated fields
-    const updatedCapstone = await Capstone.findById(id)
+    const updatedCapstone = await Project.findById(id)
       .populate('owner', 'name email role')
-      .populate('members', 'name email role');
+      .populate('members', 'name email role')
+      .populate('supervisor', 'name email role');
 
     res.json({
       message: `Status proyek berhasil diubah menjadi "${status}"`,

@@ -5,8 +5,8 @@ exports.validateStatusUpdate = [
   body('status')
     .notEmpty()
     .withMessage('Status wajib diisi')
-    .isIn(['Menunggu', 'Bisa dilanjutkan', 'Ditutup'])
-    .withMessage('Status harus salah satu dari: Menunggu, Bisa dilanjutkan, Ditutup'),
+    .isIn(['pending', 'accepted', 'rejected'])
+    .withMessage('Status harus salah satu dari: pending, accepted, rejected'),
 
   // Middleware untuk handle validation errors
   (req, res, next) => {

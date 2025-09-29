@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
   resetToken: { type: String, default: null },
   resetTokenExpires: { type: Date, default: null },
   verifyToken: { type: String, default: null },
-  verifyTokenExpires: { type: Date, default: null }
+  verifyTokenExpires: { type: Date, default: null },
   competencies: [{
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'Competency',

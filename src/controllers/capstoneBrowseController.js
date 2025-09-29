@@ -1,8 +1,9 @@
-const Capstone = require('../models/myCapstoneModel');
+const Project = require('../models/Project'); // Use unified Project model
 
 function normalizeStatus(s) {
-  if (s === 'Menunggu') return 'Dalam proses';
-  if (s === 'Ditutup') return 'Selesai';
+  if (s === 'pending') return 'Dalam proses';
+  if (s === 'rejected') return 'Selesai';
+  if (s === 'accepted') return 'Bisa dilanjutkan';
   return s;
 }
 
@@ -18,20 +19,20 @@ exports.listCapstones = async (req, res, next) => {
 
     const q = {};
     if (status) {
-      if (String(status).toLowerCase() !== 'all') q.status = status;
+      if (String(status).toLowerCase() !== 'all') q.capstoneStatus = status;
     } else {
-      q.status = 'Bisa dilanjutkan';
+      q.capstoneStatus = 'accepted';
     }
-    if (kategori) q.category = kategori;
+    if (kategori) q.tema = kategori; 
 
-    const docs = await Capstone.find(q).lean();
+    const docs = await Project.find(q).lean();
     const data = docs.map(d => ({
       id: String(d._id),
       judul: d.title,
-      kategori: d.category,
-      tahun: d.year,
+      kategori: d.tema, 
+      tahun: d.academicYear, 
       pemilikId: String(d.owner),
-      status: normalizeStatus(d.status)
+      status: normalizeStatus(d.capstoneStatus)
     }));
     res.json({ count: data.length, data });
   } catch (err) {
@@ -42,15 +43,15 @@ exports.listCapstones = async (req, res, next) => {
 // GET /api/browse/capstones/:id
 exports.getCapstoneById = async (req, res, next) => {
   try {
-    const cap = await Capstone.findById(req.params.id).lean();
+    const cap = await Project.findById(req.params.id).lean();
     if (!cap) return res.status(404).json({ error: 'Capstone tidak ditemukan' });
     res.json({
       id: String(cap._id),
       judul: cap.title,
-      kategori: cap.category,
-      tahun: cap.year,
+      kategori: cap.tema,
+      tahun: cap.academicYear,
       pemilikId: String(cap.owner),
-      status: normalizeStatus(cap.status)
+      status: normalizeStatus(cap.capstoneStatus)
     });
   } catch (err) {
     next(err); 
@@ -60,24 +61,25 @@ exports.getCapstoneById = async (req, res, next) => {
 // GET /api/browse/categories[?withCounts=true]
 exports.listCategories = async (req, res, next) => {
   try {
-    const enums = Capstone.schema.path('category').enumValues || [];
+    const { getValidThemes } = require('../configs/themes');
+    const enums = getValidThemes(); 
     if (String(req.query.withCounts).toLowerCase() !== 'true') {
       return res.json({ count: enums.length, data: enums });
     }
 
-    const rows = await Capstone.aggregate([
-      { $group: { _id: { category: '$category', status: '$status' }, count: { $sum: 1 } } }
+    const rows = await Project.aggregate([
+      { $group: { _id: { tema: '$tema', capstoneStatus: '$capstoneStatus' }, count: { $sum: 1 } } }
     ]);
 
     const map = {};
     for (const cat of enums) map[cat] = { category: cat, total: 0, bisaDilanjutkan: 0 };
 
     for (const r of rows) {
-      const cat = r._id.category;
-      const st  = r._id.status;
+      const cat = r._id.tema;
+      const st  = r._id.capstoneStatus;
       if (!map[cat]) map[cat] = { category: cat, total: 0, bisaDilanjutkan: 0 };
       map[cat].total += r.count;
-      if (st === 'Bisa dilanjutkan') map[cat].bisaDilanjutkan += r.count;
+      if (st === 'accepted') map[cat].bisaDilanjutkan += r.count;
     }
 
     const data = enums.map(cat => map[cat]);
@@ -90,7 +92,8 @@ exports.listCategories = async (req, res, next) => {
 // GET /api/browse/categories/:category/capstones?status=all&page=1&limit=10
 exports.listCapstonesByCategory = async (req, res, next) => {
   try {
-    const enums = Capstone.schema.path('category').enumValues || [];
+    const { getValidThemes } = require('../configs/themes');
+    const enums = getValidThemes();
     const raw = decodeURIComponent(req.params.category || '');
     const matched = enums.find(e => e.toLowerCase() === raw.toLowerCase());
     if (!matched) {
@@ -102,21 +105,21 @@ exports.listCapstonesByCategory = async (req, res, next) => {
     const limit = Math.max(parseInt(req.query.limit || '10', 10), 1);
     const skip  = (page - 1) * limit;
 
-    const q = { category: matched };
-    if (!status || String(status).toLowerCase() !== 'all') q.status = 'Bisa dilanjutkan';
+    const q = { tema: matched };
+    if (!status || String(status).toLowerCase() !== 'all') q.capstoneStatus = 'accepted';
 
     const [rows, total] = await Promise.all([
-      Capstone.find(q).skip(skip).limit(limit).lean(),
-      Capstone.countDocuments(q)
+      Project.find(q).skip(skip).limit(limit).lean(),
+      Project.countDocuments(q)
     ]);
 
     const data = rows.map(d => ({
       id: String(d._id),
       judul: d.title,
-      kategori: d.category,
-      tahun: d.year,
+      kategori: d.tema,
+      tahun: d.academicYear,
       pemilikId: String(d.owner),
-      status: normalizeStatus(d.status)
+      status: normalizeStatus(d.capstoneStatus)
     }));
 
     res.json({

@@ -1,6 +1,7 @@
 const express = require('express');
 const DocumentController = require('../controllers/DocumentController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
+const { requireProjectMembership, requireProjectMembershipForCreate } = require('../middlewares/documentAuth');
 const fileValidation = require('../middlewares/fileValidation');
 const { upload, uploadSingle, handleMulterError } = require('../middlewares/upload');
 
@@ -20,29 +21,34 @@ router.get('/category/:capstoneCategory', documentController.getDocumentsByCapst
 router.get('/project/:projectId/category/:capstoneCategory', documentController.getProjectDocumentsByCategory.bind(documentController));
 router.get('/', documentController.getAllDocuments.bind(documentController));
 router.get('/project/:projectId', documentController.getDocumentsByProject.bind(documentController));
+
+// Public routes for reading individual documents (no auth required)
 router.get('/:id', documentController.getDocumentById.bind(documentController));
 router.get('/:id/download', documentController.downloadDocument.bind(documentController));
 
-// Protected routes (auth required)
-router.use(authMiddleware); // Apply auth middleware to all routes below
-
+// Protected routes (auth + project membership required)
 router.post('/', 
+  authMiddleware,
   uploadSingle('file'), 
   handleMulterError,
   fileValidation.validateFileUpload,
+  requireProjectMembershipForCreate,
   documentController.uploadDocument.bind(documentController)
 );
-router.get('/:id/debug', documentController.debugDocument.bind(documentController));
-router.put('/:id', documentController.updateDocument.bind(documentController));
+
+router.get('/:id/debug', authMiddleware, requireProjectMembership, documentController.debugDocument.bind(documentController));
+router.put('/:id', authMiddleware, requireProjectMembership, documentController.updateDocument.bind(documentController));
 router.put('/:id/file', 
+  authMiddleware,
+  requireProjectMembership,
   upload.single('file'), 
   handleMulterError, 
   fileValidation.validateFileUpload, 
   documentController.replaceDocumentFile.bind(documentController)
 );
-router.delete('/:id', documentController.deleteDocument.bind(documentController));
+router.delete('/:id', authMiddleware, requireProjectMembership, documentController.deleteDocument.bind(documentController));
 
-// bulk operations
-router.post('/bulk-delete', documentController.bulkDeleteDocuments.bind(documentController));
+// bulk operations - only admin for now
+router.post('/bulk-delete', authMiddleware, documentController.bulkDeleteDocuments.bind(documentController));
 
 module.exports = router;

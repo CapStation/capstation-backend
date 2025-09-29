@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getThemeCategories } = require('../configs/themes');
 const Schema = mongoose.Schema;
 
 const capstoneSchema = new Schema({
@@ -6,7 +7,10 @@ const capstoneSchema = new Schema({
   description: String,
   category: { 
     type: String, 
-    enum: ['Kesehatan', 'Pengelolaan Sampah', 'Smart City', 'Transportasi Ramah Lingkungan'],
+    enum: {
+      values: getThemeCategories().map(theme => theme.label),
+      message: `Kategori harus salah satu dari: ${getThemeCategories().map(theme => theme.label).join(', ')}`
+    },
     required: true 
   }, 
   year: Number, 

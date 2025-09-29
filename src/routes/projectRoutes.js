@@ -1,7 +1,6 @@
-// src/routes/projects.routes.js
 const express = require("express");
 const router = express.Router();
-const Project = require("../models/projectModel");
+const Project = require("../models/Project"); // Use main Project model instead of legacy
 const { authMiddleware } = require("../middlewares/authMiddleware");
 const {
   requireRole,
