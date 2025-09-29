@@ -5,9 +5,6 @@ const Project = require('../models/Project');
  * Middleware untuk memastikan user memiliki akses ke dokumen/project
  */
 
-/**
- * Check if user is owner or member of the project related to document
- */
 exports.requireProjectMembership = async (req, res, next) => {
   try {
     const { id: documentId } = req.params;

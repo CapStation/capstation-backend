@@ -37,35 +37,30 @@ const groupSchema = new Schema({
   toObject: { virtuals: true }
 });
 
-// Virtual untuk menghitung jumlah members
 groupSchema.virtual('memberCount').get(function() {
   return this.members.length;
 });
-
-// Virtual untuk menghitung jumlah projects
 groupSchema.virtual('projectCount').get(function() {
   return this.projects.length;
 });
 
-// Index untuk performa
 groupSchema.index({ owner: 1 });
 groupSchema.index({ isActive: 1 });
 
 // Middleware untuk memastikan owner ada di members
 groupSchema.pre('save', function(next) {
-  // Pastikan owner selalu ada di dalam members
   if (!this.members.includes(this.owner)) {
     this.members.unshift(this.owner); // Add owner di posisi pertama
   }
   next();
 });
 
-// Method untuk check apakah user adalah member
+// Method check apakah user adalah member
 groupSchema.methods.isMember = function(userId) {
   return this.members.some(member => member.toString() === userId.toString());
 };
 
-// Method untuk check apakah user adalah owner
+// Method check apakah user adalah owner
 groupSchema.methods.isOwner = function(userId) {
   return this.owner.toString() === userId.toString();
 };

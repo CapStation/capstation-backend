@@ -62,12 +62,11 @@ class GroupController {
         name,
         description,
         owner: userId,
-        members: validMembers // Owner akan ditambahkan otomatis via pre-save middleware
+        members: validMembers // tambah otomatis owner otomatis - pre-save middleware
       });
 
       await newGroup.save();
       
-      // Populate data untuk response
       await newGroup.populate([
         { path: 'owner', select: 'name email' },
         { path: 'members', select: 'name email' }

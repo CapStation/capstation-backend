@@ -135,8 +135,6 @@ projectSchema.pre('save', async function(next) {
       if (group) {
         // Set owner dari group owner
         this.owner = group.owner;
-        
-        // Set members dari group members
         this.members = [...group.members];
         
         // Add project reference ke group

@@ -278,8 +278,8 @@ class ProjectService {
 
   /**
    * Mendapatkan project yang bisa dilanjutkan (untuk capstone yang accepted)
-   * @param {Object} filters - Additional filters
-   * @returns {Promise<Object>} Available projects dengan pagination
+   * @param {Object} filters 
+   * @returns {Promise<Object>} 
    */
   async getAvailableProjects(filters = {}) {
     try {
@@ -310,7 +310,6 @@ class ProjectService {
         throw new Error('Project tidak ditemukan');
       }
 
-      // Format response untuk mempersingkat fileData
       return formatProjectForResponse(project);
     } catch (error) {
       throw new Error(`Gagal mengambil detail project: ${error.message}`);
@@ -333,13 +332,12 @@ class ProjectService {
         throw new Error('Project tidak ditemukan');
       }
 
-      // Permission check with null safety - include members check
       const userIdString = userId.toString();
       const isOwner = project.owner && project.owner.toString() === userIdString;
       const isMember = project.members && project.members.some(memberId => memberId.toString() === userIdString);
       
       if (!isOwner && !isMember) {
-        // Check if user is admin or dosen (using real auth system)
+        // Check if user is admin or dosen
         const user = await User.findById(userId);
         if (!user || (user.role !== 'admin' && user.role !== 'dosen')) {
           throw new Error('Tidak memiliki izin untuk mengupdate project ini. Hanya owner, members, admin, atau dosen yang diizinkan.');
@@ -363,7 +361,7 @@ class ProjectService {
   }
 
   /**
-   * Update status project (untuk capstone: pending/accepted/rejected, untuk regular: active/completed/suspended/deactive)
+   * Update status project
    * @param {String} projectId - ID project
    * @param {String} status - Status baru
    * @param {String} userId - ID user yang melakukan update
@@ -377,7 +375,6 @@ class ProjectService {
       }
 
       let updateData = {};
-      // For capstone projects, update capstoneStatus
       const validCapstoneStatuses = ['pending', 'accepted', 'rejected'];
       if (!validCapstoneStatuses.includes(status)) {
         throw new Error('Status capstone tidak valid. Harus pending, accepted, atau rejected');
