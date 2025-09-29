@@ -1,7 +1,7 @@
 // src/routes/projects.routes.js
 const express = require("express");
 const router = express.Router();
-const Project = require("../models/projectModel");
+const Project = require("../models/Project");
 const { authMiddleware } = require("../middlewares/authMiddleware");
 const {
   requireRole,
@@ -16,7 +16,7 @@ router.post(
   async (req, res, next) => {
     try {
       const payload = req.body;
-      payload.members = payload.members || [req.user._id];
+      payload.owner = payload.owner || req.user._id;
       const p = await Project.create(payload);
       res.status(201).json(p);
     } catch (err) {
@@ -29,7 +29,7 @@ router.post(
 router.put(
   "/:id",
   authMiddleware,
-  requireOwnershipOrRole(Project, "members", "id", "admin", "dosen"),
+  requireOwnershipOrRole(Project, "owner", "id", "admin", "dosen"),
   async (req, res, next) => {
     try {
       const updated = await Project.findByIdAndUpdate(req.params.id, req.body, {
@@ -46,7 +46,7 @@ router.put(
 router.delete(
   "/:id",
   authMiddleware,
-  requireOwnershipOrRole(Project, "members", "id", "admin"),
+  requireOwnershipOrRole(Project, "owner", "id", "admin"),
   async (req, res, next) => {
     try {
       await Project.findByIdAndDelete(req.params.id);
@@ -60,10 +60,7 @@ router.delete(
 // GET all projects (public or with auth, sesuai kebutuhan)
 router.get("/", async (req, res, next) => {
   try {
-    const projects = await Project.find().populate(
-      "members supervisor",
-      "name email"
-    );
+    const projects = await Project.find().populate("owner group", "name email");
     res.json(projects);
   } catch (err) {
     next(err);

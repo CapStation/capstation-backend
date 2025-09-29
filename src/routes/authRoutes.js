@@ -81,4 +81,22 @@ router.get("/google/failure", (req, res) =>
 // Email verification
 router.get("/verify", authController.verifyEmail);
 
+// Debug routes (only for development)
+if (process.env.NODE_ENV === "development") {
+  const {
+    debugUserRegistration,
+    cleanUserData,
+  } = require("../utils/debugUtils");
+
+  router.get("/debug/:email", async (req, res) => {
+    const result = await debugUserRegistration(req.params.email);
+    res.json(result);
+  });
+
+  router.delete("/debug/:email", async (req, res) => {
+    const result = await cleanUserData(req.params.email);
+    res.json(result);
+  });
+}
+
 module.exports = router;
