@@ -162,8 +162,8 @@ Dalam pengembangan CapStation, teknologi utama yang digunakan meliputi:
 
 3. Buat file .env di root project (lihat bagian Environment Variables).
 
-4. Jalankan server (nodemon)
-   ```npm start``` ||```npm run dev``` 
+4. Jalankan server
+   ```npm start``` ||```npm run dev``` (nodemon)
 
 ## 🔑 Environment Variables
 ```
