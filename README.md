@@ -8,12 +8,15 @@ CapStation hadir sebagai solusi atas permasalahan umum dalam pengelolaan capston
 Fitur utama meliputi manajemen proyek, manajemen kelompok, manajemen pengumuman, dokumentasi digital, serta autentikasi dan otorisasi modern (verifikasi email, reset password, login Google OAuth2, dan RBAC). Melalui fitur-fitur ini, CapStation memungkinkan pengajuan proyek baru, pelanjutan proyek terdahulu, pemantauan status, serta penyebaran informasi yang lebih efektif. Dengan demikian, CapStation tidak hanya mempermudah mahasiswa dalam melaksanakan capstone, tetapi juga membantu dosen dan pihak departemen dalam pembimbingan, monitoring, serta pengambilan keputusan, sehingga keseluruhan proses capstone menjadi lebih terstruktur, terdokumentasi, dan berkelanjutan.
 
 ## ✨ Nama Kelompok dan Daftar Anggota
-### Kelompok 7 
-- Fahmi Irfan Faiz (23/520563/TK/57396)
-- Nevrita Natasya Putriana (23/514635/TK/56500)
-- Benjamin Sigit (23/514737/TK/56513)
-- Moses Saidasdo (23/523274/TK/57854)
-- Hayunitya Edadwi Pratita (23/518670/TK/57134)
+### Kelompok 7
+
+| No | Nama | NIM |
+|----|------|-----|
+| 1 | Fahmi Irfan Faiz | 23/520563/TK/57396 |
+| 2 | Nevrita Natasya Putriana | 23/514635/TK/56500 |
+| 3 | Benjamin Sigit | 23/514737/TK/56513 |
+| 4 | Moses Saidasdo | 23/523274/TK/57854 |
+| 5 | Hayunitya Edadwi Pratita | 23/518670/TK/57134 |
 
 ## 📂 Struktur Folder
     capstation-backend/
@@ -146,6 +149,7 @@ Dalam pengembangan CapStation, teknologi utama yang digunakan meliputi:
 
 ## 🔗 URL Gdrive Laporan
 
+[📁 Laporan Project CapStation Kelompok 7](https://drive.google.com/drive/folders/18yGy_P7kBniyhUtBe0YxUs2l9E6iEric?usp=sharing)
 
 ## ⚒️ Instalasi
 1. Clone repository   
