@@ -74,8 +74,7 @@ Fitur utama meliputi manajemen proyek, manajemen kelompok, manajemen pengumuman,
     │   │   ├── oauthRoutes.js
     │   │   ├── projects.js
     │   │   ├── requestDecisionRoutes.js
-    │   │   └── userRoutes.js
-    │   │   └── Seeder/
+    │   │   └── userRoutes.js 
     │   │
     │   ├── services/
     │   │   ├── Base64FileService.js
@@ -84,9 +83,12 @@ Fitur utama meliputi manajemen proyek, manajemen kelompok, manajemen pengumuman,
     │   │   ├── mailService.js
     │   │   └── ProjectService.js
     │   │
-    │   └── utils/
-    │       ├── FileValidationManager.js
-    │       └── responseFormatter.js
+    │   ├── utils/
+    │   │    ├── FileValidationManager.js
+    │   │    └── responseFormatter.js
+    │   │
+    │   └── Seeder/
+    │        └── competencySeeder.js
     │
     ├── app.js
     ├── server.js
