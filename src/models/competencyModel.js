@@ -44,8 +44,7 @@ const competencySchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Index untuk pencarian
-competencySchema.index({ name: 1 });
+// Index untuk pencarian (name sudah di-index otomatis karena unique: true)
 competencySchema.index({ category: 1 });
 competencySchema.index({ isActive: 1 });
 
