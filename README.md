@@ -8,12 +8,15 @@ CapStation hadir sebagai solusi atas permasalahan umum dalam pengelolaan capston
 Fitur utama meliputi manajemen proyek, manajemen kelompok, manajemen pengumuman, dokumentasi digital, serta autentikasi dan otorisasi modern (verifikasi email, reset password, login Google OAuth2, dan RBAC). Melalui fitur-fitur ini, CapStation memungkinkan pengajuan proyek baru, pelanjutan proyek terdahulu, pemantauan status, serta penyebaran informasi yang lebih efektif. Dengan demikian, CapStation tidak hanya mempermudah mahasiswa dalam melaksanakan capstone, tetapi juga membantu dosen dan pihak departemen dalam pembimbingan, monitoring, serta pengambilan keputusan, sehingga keseluruhan proses capstone menjadi lebih terstruktur, terdokumentasi, dan berkelanjutan.
 
 ## ✨ Nama Kelompok dan Daftar Anggota
-### Kelompok 7 
-- Fahmi Irfan Faiz (23/520563/TK/57396)
-- Nevrita Natasya Putriana (23/514635/TK/56500)
-- Benjamin Sigit (23/514737/TK/56513)
-- Moses Saidasdo (23/523274/TK/57854)
-- Hayunitya Edadwi Pratita (23/518670/TK/57134)
+### Kelompok 7
+
+| No | Nama | NIM |
+|----|------|-----|
+| 1 | Fahmi Irfan Faiz | 23/520563/TK/57396 |
+| 2 | Nevrita Natasya Putriana | 23/514635/TK/56500 |
+| 3 | Benjamin Sigit | 23/514737/TK/56513 |
+| 4 | Moses Saidasdo | 23/523274/TK/57854 |
+| 5 | Hayunitya Edadwi Pratita | 23/518670/TK/57134 |
 
 ## 📂 Struktur Folder
     capstation-backend/
@@ -146,6 +149,7 @@ Dalam pengembangan CapStation, teknologi utama yang digunakan meliputi:
 
 ## 🔗 URL Gdrive Laporan
 
+[📁 Laporan Project CapStation Kelompok 7](https://drive.google.com/drive/folders/18yGy_P7kBniyhUtBe0YxUs2l9E6iEric?usp=sharing)
 
 ## ⚒️ Instalasi
 1. Clone repository   
@@ -158,8 +162,8 @@ Dalam pengembangan CapStation, teknologi utama yang digunakan meliputi:
 
 3. Buat file .env di root project (lihat bagian Environment Variables).
 
-4. Jalankan server  
-   ```npm run dev```
+4. Jalankan server (nodemon)
+   ```npm start``` ||```npm run dev``` 
 
 ## 🔑 Environment Variables
 ```
@@ -185,27 +189,86 @@ SMTP_PASS=your_app_password
 ```
 
 ## 📡 API Endpoints
-### POST
-- /api/auth/register :	Register user baru
-- /api/auth/login	: Login akun user
-- /api/auth/forgot-password : Kirim email untuk reset password
-- /api/auth/reset-password : Reset password menggunakan token dari email reset
-- /api/announcements : Admin/Dosen membuat pengumuman
-- /api/projects	: Menambahkan data capstone project
 
-### GET
-- /api/auth/verify?token=<token> : Verifikasi email user
-- /api/auth/google : Redirect ke Google OAuth 2.0 login page untuk login
-- /api/announcements : Semua role bisa melihat seluruh daftar pengumuman
-- /api/dashboard : Melihat dashboard informasi
-- /api/groups : Melihat detail grup Capstone
-- /api/projects : Melihat data capstone project
+### Authentication (Auth)
 
-### PUT
-- /api/announcements/<id_announcement> : Admin/Dosen mengedit pengumuman
-- /api/projects : Mengubah data capstone project
+| Endpoint | Method |
+|----------|--------|
+| `/api/auth/register` | POST |
+| `/api/auth/verify?token=<token>` | GET |
+| `/api/auth/login` | POST |
+| `/api/auth/forgot-password` | POST |
+| `/api/auth/reset-password` | POST |
+| `/api/auth/google` | GET |
 
-### DELETE
-- /api/announcements/<id_announcement> : Admin/Dosen menghapus pengumuman sesuai ID
-- /api/projects : Menghapus data capstone project
+### Announcements
 
+| Endpoint | Method |
+|----------|--------|
+| `/api/announcements` | POST |
+| `/api/announcements` | GET |
+| `/api/announcements/<id_announcement>` | DELETE |
+| `/api/announcements/<id_announcement>` | PUT |
+
+### Dashboard
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/dashboard` | GET |
+
+### Groups
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/groups` | GET |
+| `/api/groups` | POST |
+| `/api/groups/<id_group>` | PUT |
+
+### Capstone Projects
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/projects` | GET |
+| `/api/projects` | POST |
+| `/api/projects/<projectId>` | GET |
+| `/api/projects/<projectId>` | POST |
+| `/api/projects/<projectId>` | PUT |
+| `/api/projects/<projectId>` | DELETE |
+| `/api/project/tema/<theme>` | GET |
+| `/api/project/tema/<status>` | GET |
+| `/api/projects/<filter1>&<filter2>` | GET |
+
+### Documents
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/documents` | GET |
+| `/api/documents` | POST |
+| `/api/documents/<documentId>` | GET |
+| `/api/documents/<documentId>` | PUT |
+| `/api/documents/<documentId>` | DELETE |
+| `/api/document/category/<capstoneCategories>` | GET |
+| `/api/document/tema/<themes>` | GET |
+| `/api/document/<filter1>&<filter2>` | GET |
+
+### User's Competencies
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/users/competencies` | POST |
+| `/api/competencies` | GET |
+| `/api/competencies` | POST |
+| `/api/competencies/<id>` | PUT |
+| `/api/competencies/<id>` | DELETE |
+
+### Project Requests
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/browse/capstones` | GET |
+| `/api/requests` | POST |
+| `/api/requests` | GET |
+| `/api/requests?status=pending` | GET |
+| `/api/requests/<requestId>/decide` | PATCH |
+| `/api/requests/<requestId>/history` | GET |
+| `/api/me/decisions/history` | GET |
