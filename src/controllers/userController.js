@@ -207,3 +207,78 @@ exports.setCompetencies = async (req, res, next) => {
     next(err);
   }
 };
+
+// Get my profile
+exports.getMyProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('-passwordHash -resetToken -resetTokenExpires -verifyToken -verifyTokenExpires')
+      .populate('competencies', 'name category description');
+      
+    res.json({
+      message: 'Profil berhasil diambil',
+      user: user
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Get user profile by ID
+exports.getUserProfile = async (req, res, next) => {
+  try {
+    const { userId } = req.params;
+    
+    const user = await User.findById(userId)
+      .select('name email role competencies createdAt')
+      .populate('competencies', 'name category description');
+      
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+    
+    res.json({
+      message: 'Profil user berhasil diambil',
+      user: user
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Search users by competency
+exports.searchUsersByCompetency = async (req, res, next) => {
+  try {
+    const { competencyId } = req.query;
+    
+    if (!competencyId) {
+      return res.status(400).json({ message: 'competencyId parameter wajib diisi' });
+    }
+
+    // Cek apakah kompetensi exists
+    const competency = await Competency.findOne({ _id: competencyId, isActive: true });
+    if (!competency) {
+      return res.status(404).json({ message: 'Kompetensi tidak ditemukan atau tidak aktif' });
+    }
+
+    // Cari users yang memiliki kompetensi tersebut
+    const users = await User.find({ 
+      competencies: competencyId,
+      _id: { $ne: req.user._id } // Exclude current user
+    })
+    .select('name email role competencies')
+    .populate('competencies', 'name category description');
+
+    res.json({
+      message: `Ditemukan ${users.length} user dengan kompetensi ${competency.name}`,
+      competency: {
+        id: competency._id,
+        name: competency.name,
+        category: competency.category
+      },
+      users: users
+    });
+  } catch (err) {
+    next(err);
+  }
+};
