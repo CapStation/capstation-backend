@@ -12,19 +12,19 @@ const documentController = new DocumentController();
 router.get('/stats', documentController.getDocumentStatistics.bind(documentController));
 router.get('/categories', documentController.getDocumentCategories.bind(documentController));
 
-// Filter berbasis Tema (public)
-router.get('/tema/:tema', documentController.getDocumentsByTema.bind(documentController));
-router.get('/tema/:tema/stats', documentController.getDocumentStatsByTema.bind(documentController));
+// Protected routes for reading documents (auth required)
+router.get('/tema/:tema', authMiddleware, documentController.getDocumentsByTema.bind(documentController));
+router.get('/tema/:tema/stats', authMiddleware, documentController.getDocumentStatsByTema.bind(documentController));
 
-// Filter berbasis Kategori Capstone (public)
-router.get('/category/:capstoneCategory', documentController.getDocumentsByCapstoneCategory.bind(documentController));
-router.get('/project/:projectId/category/:capstoneCategory', documentController.getProjectDocumentsByCategory.bind(documentController));
-router.get('/', documentController.getAllDocuments.bind(documentController));
-router.get('/project/:projectId', documentController.getDocumentsByProject.bind(documentController));
+// Filter berbasis Kategori Capstone (auth required)
+router.get('/category/:capstoneCategory', authMiddleware, documentController.getDocumentsByCapstoneCategory.bind(documentController));
+router.get('/project/:projectId/category/:capstoneCategory', authMiddleware, documentController.getProjectDocumentsByCategory.bind(documentController));
+router.get('/', authMiddleware, documentController.getAllDocuments.bind(documentController));
+router.get('/project/:projectId', authMiddleware, documentController.getDocumentsByProject.bind(documentController));
 
-// Public routes for reading individual documents (no auth required)
-router.get('/:id', documentController.getDocumentById.bind(documentController));
-router.get('/:id/download', documentController.downloadDocument.bind(documentController));
+// Protected routes for reading individual documents (auth required)
+router.get('/:id', authMiddleware, documentController.getDocumentById.bind(documentController));
+router.get('/:id/download', authMiddleware, documentController.downloadDocument.bind(documentController));
 
 // Protected routes (auth + project membership required)
 router.post('/', 
