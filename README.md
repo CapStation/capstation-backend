@@ -162,8 +162,8 @@ Dalam pengembangan CapStation, teknologi utama yang digunakan meliputi:
 
 3. Buat file .env di root project (lihat bagian Environment Variables).
 
-4. Jalankan server  
-   ```npm run dev```
+4. Jalankan server (nodemon)
+   ```npm start``` ||```npm run dev``` 
 
 ## 🔑 Environment Variables
 ```
@@ -231,8 +231,9 @@ SMTP_PASS=your_app_password
 | `/api/projects` | GET |
 | `/api/projects` | POST |
 | `/api/projects/<projectId>` | GET |
-| `/api/projects` | PUT |
-| `/api/projects` | DELETE |
+| `/api/projects/<projectId>` | POST |
+| `/api/projects/<projectId>` | PUT |
+| `/api/projects/<projectId>` | DELETE |
 | `/api/project/tema/<theme>` | GET |
 | `/api/project/tema/<status>` | GET |
 | `/api/projects/<filter1>&<filter2>` | GET |
@@ -255,13 +256,19 @@ SMTP_PASS=your_app_password
 | Endpoint | Method |
 |----------|--------|
 | `/api/users/competencies` | POST |
-
-### Competencies Management
-
-| Endpoint | Method |
-|----------|--------|
 | `/api/competencies` | GET |
 | `/api/competencies` | POST |
 | `/api/competencies/<id>` | PUT |
 | `/api/competencies/<id>` | DELETE |
 
+### Project Requests
+
+| Endpoint | Method |
+|----------|--------|
+| `/api/browse/capstones` | GET |
+| `/api/requests` | POST |
+| `/api/requests` | GET |
+| `/api/requests?status=pending` | GET |
+| `/api/requests/<requestId>/decide` | PATCH |
+| `/api/requests/<requestId>/history` | GET |
+| `/api/me/decisions/history` | GET |
