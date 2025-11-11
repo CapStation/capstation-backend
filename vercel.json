@@ -1,29 +1,22 @@
 {
   "version": 2,
-  "name": "capstation-backend",
-  "builds": [
+  "rewrites": [
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
+      "source": "/(.*)",
+      "destination": "/api/index.js"
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "api/index.js"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production",
-    "TZ": "Asia/Jakarta"
-  },
-  "regions": ["sin1"],
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
       "memory": 1024
     }
   },
+  "env": {
+    "NODE_ENV": "production",
+    "TZ": "Asia/Jakarta"
+  },
+  "regions": ["sin1"],
   "headers": [
     {
       "source": "/api/(.*)",
