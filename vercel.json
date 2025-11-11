@@ -13,8 +13,7 @@
     }
   },
   "env": {
-    "NODE_ENV": "production",
-    "TZ": "Asia/Jakarta"
+    "NODE_ENV": "production"
   },
   "regions": ["sin1"],
   "headers": [

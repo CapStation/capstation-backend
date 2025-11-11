@@ -6,6 +6,9 @@
  * Vercel requires a serverless handler that processes each request
  */
 
+// Set timezone to Asia/Jakarta for serverless function
+process.env.TZ = "Asia/Jakarta";
+
 const app = require("../src/app");
 
 // Export the Express app as a serverless function handler
