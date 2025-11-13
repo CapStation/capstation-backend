@@ -1,67 +1,46 @@
 const DocumentService = require('../services/DocumentService');
 const multer = require('multer');
 const { getValidThemesDash, isValidTheme, convertToUnderscore } = require('../configs/themes');
+const FileValidationManager = require('../utils/FileValidationManager');
 
 class DocumentController {
   constructor() {
     this.documentService = new DocumentService();
     
     // Setup multer for memory storage (base64)
-    this.upload = multer({
+    const multerConfig = {
       storage: multer.memoryStorage(),
       limits: {
-        fileSize: 100 * 1024 * 1024 // 100MB limit - untuk akomodasi video
+        fileSize: 100 * 1024 * 1024, // 100MB limit per file
+        files: 10 // Maksimal 10 files
       }
-    }).single('file');
+    };
+    
+    // Single file upload
+    this.uploadSingle = multer(multerConfig).single('file');
+    
+    // Multiple files upload (up to 10)
+    this.uploadMultiple = multer(multerConfig).array('file', 10);
   }
 
   /**
-   * base64 storage upload and create
+   * base64 storage upload and create (supports single or multiple files)
    * POST /api/documents
    */
   async uploadDocument(req, res) {
     try {
-      // Check if file was uploaded via multer
-      if (!req.file) {
+      // Check if files were uploaded via multer
+      if (!req.files || req.files.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'File is required for upload',
+          message: 'At least one file is required for upload',
           data: null
         });
       }
 
-      console.log('File received:', {
-        originalname: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size
-      });
+      console.log(`📁 ${req.files.length} file(s) received`);
 
-      // Extract document metadata from request body
-      const documentData = {
-        title: req.body.title,
-        description: req.body.description,
-        project: req.body.project,
-        documentType: req.body.documentType,
-        capstoneType: req.body.capstoneCategory, // capstone1, capstone2, general
-        originalName: req.file.originalname,
-        mimeType: req.file.mimetype
-      };
-
-      console.log('Document data:', documentData);
-
-      // Validasi data yang dibutuhkan
-      if (!documentData.title || !documentData.project || !documentData.documentType || !documentData.capstoneType) {
-        console.log('Missing required fields');
-        return res.status(400).json({
-          success: false,
-          message: 'Required fields missing: title, project, documentType, capstoneCategory',
-          data: null
-        });
-      }
-
-      console.log('Field validation success');
-
-      // Get user ID from auth middleware (real auth system)
+      // Get user ID from auth middleware
       const userId = req.user?._id;
       
       if (!userId) {
@@ -74,26 +53,125 @@ class DocumentController {
       
       console.log('👤 Using authenticated userId:', userId);
 
-      // Create document via service with file buffer
-      const document = await this.documentService.createDocument(documentData, req.file.buffer, userId);
-      console.log('✅ Document created successfully:', document._id);
+      // Extract common metadata from request body
+      const baseTitle = req.body.title;
+      const description = req.body.description;
+      const project = req.body.project;
+      const documentType = req.body.documentType;
+      const capstoneType = req.body.capstoneCategory;
+
+      // Validasi data yang dibutuhkan
+      if (!baseTitle || !project || !documentType || !capstoneType) {
+        console.log('Missing required fields');
+        return res.status(400).json({
+          success: false,
+          message: 'Required fields missing: title, project, documentType, capstoneCategory',
+          data: null
+        });
+      }
+
+      console.log('Field validation success');
+
+      // Process each file
+      const uploadedDocuments = [];
+      const errors = [];
+
+      for (let i = 0; i < req.files.length; i++) {
+        const file = req.files[i];
+        
+        // Validate file type and size
+        try {
+          const validationResult = FileValidationManager.validateFile({
+            originalName: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size,
+            documentType: req.body.documentType
+          });
+          
+          if (!validationResult.isValid) {
+            errors.push({
+              file: file.originalname,
+              error: validationResult.error
+            });
+            continue; // Skip this file
+          }
+        } catch (validationError) {
+          errors.push({
+            file: file.originalname,
+            error: validationError.message
+          });
+          continue; // Skip this file
+        }
+        
+        // Generate title with number suffix if multiple files
+        const title = req.files.length > 1 ? `${baseTitle} (${i + 1})` : baseTitle;
+
+        try {
+          console.log(`Processing file ${i + 1}/${req.files.length}:`, {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            title: title
+          });
+
+          const documentData = {
+            title: title,
+            description: description,
+            project: project,
+            documentType: documentType,
+            capstoneType: capstoneType,
+            originalName: file.originalname,
+            mimeType: file.mimetype
+          };
+
+          // Create document via service with file buffer
+          const document = await this.documentService.createDocument(documentData, file.buffer, userId);
+          
+          uploadedDocuments.push({
+            _id: document._id,
+            title: document.title,
+            description: document.description,
+            originalName: document.originalName,
+            mimeType: document.mimeType,
+            documentType: document.documentType,
+            capstoneType: document.capstoneType,
+            project: document.project,
+            fileSize: document.fileSize,
+            uploadedBy: document.uploadedBy,
+            createdAt: document.createdAt,
+            updatedAt: document.updatedAt
+          });
+
+          console.log(`Document ${i + 1} created successfully:`, document._id);
+        } catch (error) {
+          console.error(`❌ Error uploading file ${i + 1}:`, error.message);
+          errors.push({
+            file: file.originalname,
+            title: title,
+            error: error.message
+          });
+        }
+      }
+
+      // Return response
+      if (uploadedDocuments.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'All file uploads failed',
+          data: null,
+          errors: errors
+        });
+      }
 
       res.status(201).json({
         success: true,
-        message: 'Document uploaded successfully',
-        data: {
-          _id: document._id,
-          title: document.title,
-          description: document.description,
-          originalName: document.originalName,
-          mimeType: document.mimeType,
-          documentType: document.documentType,
-          capstoneType: document.capstoneType,
-          project: document.project,
-          fileSize: document.fileSize,
-          uploadedBy: document.uploadedBy,
-          createdAt: document.createdAt,
-          updatedAt: document.updatedAt
+        message: `${uploadedDocuments.length} document(s) uploaded successfully`,
+        data: uploadedDocuments,
+        errors: errors.length > 0 ? errors : undefined,
+        summary: {
+          total: req.files.length,
+          successful: uploadedDocuments.length,
+          failed: errors.length
         }
       });
     } catch (error) {
@@ -279,7 +357,6 @@ class DocumentController {
         fileHash: document.fileHash,
         compressionLevel: document.compressionLevel,
         fileExtension: document.fileExtension,
-        // Add sample data for debugging
         base64Sample: {
           first200: document.fileData ? document.fileData.substring(0, 200) : null,
           last200: document.fileData ? document.fileData.substring(document.fileData.length - 200) : null,
@@ -346,6 +423,48 @@ class DocumentController {
       res.send(result.fileBuffer);
     } catch (error) {
       console.error('Download Error:', error);
+      res.status(404).json({
+        success: false,
+        message: error.message,
+        data: null
+      });
+    }
+  }
+
+  /**
+   * Preview document in browser (inline)
+   * GET /api/documents/:id/preview
+   */
+  async previewDocument(req, res) {
+    try {
+      const { id } = req.params;
+      
+      console.log('👁️ Preview request received for document:', id);
+      console.log('📋 Request headers:', {
+        authorization: req.headers.authorization ? 'Present' : 'Missing',
+        'x-user-id': req.headers['x-user-id'],
+        origin: req.headers.origin
+      });
+      
+      const result = await this.documentService.downloadDocument(id);
+
+      console.log('👁️ Controller preview result:');
+      console.log('- File buffer length:', result.fileBuffer.length);
+      console.log('- Original name:', result.originalName);
+      console.log('- MIME type:', result.mimeType);
+
+      // Set response headers for inline preview
+      res.setHeader('Content-Type', result.mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="${result.originalName}"`);
+      res.setHeader('Content-Length', result.fileBuffer.length);
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour for preview
+      res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'http://localhost:3000');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+      console.log('✅ Sending preview buffer with length:', result.fileBuffer.length);
+      res.send(result.fileBuffer);
+    } catch (error) {
+      console.error('❌ Preview Error:', error);
       res.status(404).json({
         success: false,
         message: error.message,
