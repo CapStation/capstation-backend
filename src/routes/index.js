@@ -9,6 +9,7 @@ const capstoneRoutes = require('./capstoneRoutes');
 const announcementRoutes = require('./announcementRoutes');
 const groupRoutes = require('./groupRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
+const userRoutes = require('./userRoutes');
 
 const router = express.Router();
 
@@ -25,6 +26,7 @@ router.get('/health', (req, res) => {
 router.use('/auth', authRoutes);
 router.use('/auth/oauth', oauthRoutes);
 router.use('/projects', projectRoutes);
+router.use('/users', userRoutes);
 router.use('/announcements', announcementRoutes);
 router.use('/groups', groupRoutes);
 router.use('/dashboard', dashboardRoutes);
