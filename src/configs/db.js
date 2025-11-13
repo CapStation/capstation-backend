@@ -5,8 +5,18 @@ const connectDB = async () => {
   try {
     const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
     
-    console.log('🔌 Attempting to connect to MongoDB...');   
-    await mongoose.connect(uri);
+    if (!uri) {
+      throw new Error('MongoDB URI not found in environment variables');
+    }
+    
+    console.log('🔌 Attempting to connect to MongoDB...');
+    
+    // Optimized settings for both local and serverless environments
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000, // 5 seconds timeout
+      socketTimeoutMS: 45000, // 45 seconds socket timeout
+    });
+    
     console.log('✅ MongoDB connected successfully');
     
     mongoose.connection.on('error', (error) => {
@@ -20,7 +30,7 @@ const connectDB = async () => {
     return true;
   } catch (error) {
     console.error('❌ MongoDB connection failed:', error.message);
-    console.log('⚠️ Server continue without database connection');
+    console.log('⚠️ Server continuing without database connection');
     return false;
   }
 };

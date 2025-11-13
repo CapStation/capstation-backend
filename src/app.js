@@ -4,7 +4,6 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
 const passport = require("passport");
-const connectDB = require("./configs/db");
 require("dotenv").config();
 
 process.env.TZ = "Asia/Jakarta";
@@ -19,15 +18,10 @@ const routes = require("./routes");
 
 const app = express();
 
-const initializeDB = async () => {
-  try {
-    await connectDB();
-  } catch (err) {
-    console.error("Database initialization failed ❌:", err.message);
-  }
-};
-
-initializeDB();
+// Note: Database connection is now handled in:
+// - api/index.js for Vercel serverless deployment
+// - server.js for local development
+// This prevents duplicate connection attempts
 
 // Security middleware
 app.use(
