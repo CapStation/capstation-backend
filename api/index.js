@@ -27,27 +27,27 @@ async function ensureDbConnection() {
 
   try {
     const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
-    
+
     if (!uri) {
-      console.error('❌ No MongoDB URI found in environment variables');
-      throw new Error('MongoDB URI not configured');
+      console.error("❌ No MongoDB URI found in environment variables");
+      throw new Error("MongoDB URI not configured");
     }
 
-    console.log('🔌 Connecting to MongoDB for serverless function...');
-    
+    console.log("🔌 Connecting to MongoDB for serverless function...");
+
     // Connect with serverless-optimized settings
     const connection = await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 5000, // 5 seconds timeout
       socketTimeoutMS: 45000, // 45 seconds socket timeout
       maxPoolSize: 10, // Limit connection pool for serverless
     });
-    
+
     cachedConnection = connection;
-    console.log('✅ MongoDB connected successfully (serverless)');
-    
+    console.log("✅ MongoDB connected successfully (serverless)");
+
     return connection;
   } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message);
+    console.error("❌ MongoDB connection failed:", error.message);
     cachedConnection = null;
     throw error;
   }
@@ -61,18 +61,17 @@ module.exports = async (req, res) => {
   try {
     // Ensure database is connected
     await ensureDbConnection();
-    
+
     // Process the request with Express app
     return app(req, res);
   } catch (error) {
-    console.error('❌ Serverless function error:', error);
-    
+    console.error("❌ Serverless function error:", error);
+
     // Return error response if DB connection fails
     return res.status(503).json({
       success: false,
-      message: 'Service temporarily unavailable. Database connection failed.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      message: "Service temporarily unavailable. Database connection failed.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
