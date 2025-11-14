@@ -10,6 +10,9 @@ const {
   validateCompetencyIndex 
 } = require('../middlewares/userValidator');
 
+// User list route (with optional role filter)
+router.get('/', authMiddleware, userController.getUsers);
+
 // Profile routes
 router.get('/profile', authMiddleware, userController.getMyProfile);
 router.get('/profile/:userId', authMiddleware, validateUserId, userController.getUserProfile);

@@ -146,6 +146,56 @@ class GroupController {
   }
 
   /**
+   * Get group by ID
+   * GET /api/groups/:groupId
+   */
+  async getGroupById(req, res) {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user?._id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User tidak terautentikasi',
+          data: null
+        });
+      }
+
+      const group = await Group.findById(groupId)
+        .populate([
+          { path: 'owner', select: 'name email role' },
+          { path: 'members', select: 'name email role' },
+          { path: 'projects', select: 'title description tema status createdAt members', 
+            populate: { path: 'members', select: 'name email' } 
+          }
+        ]);
+
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: 'Grup tidak ditemukan',
+          data: null
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Detail grup berhasil diambil',
+        data: group
+      });
+
+    } catch (error) {
+      console.error('Get Group By ID Error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message,
+        data: null
+      });
+    }
+  }
+
+  /**
    * Get all groups (for admin or browse)
    * GET /api/groups
    */

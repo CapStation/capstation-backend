@@ -39,6 +39,9 @@ router.put('/:id', requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'do
 // Update project status (owner/members, supervisor, admin can update status)
 router.patch('/:id/status', requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.updateProjectStatus);
 
+// Update project group (owner, admin, dosen can update group)
+router.patch('/:id/group', requireOwnershipOrRole(Project, 'owner', 'id', 'admin', 'dosen'), projectController.updateProjectGroup);
+
 // Delete project (only owner/members or admin can delete)
 router.delete('/:id', requireOwnershipOrRole(Project, 'members', 'id', 'admin'), projectController.deleteProject);
 
