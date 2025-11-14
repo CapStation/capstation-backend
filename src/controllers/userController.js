@@ -1,6 +1,32 @@
 const User = require('../models/userModel');
 const Competency = require('../models/competencyModel');
 
+// Get users with optional role filter
+exports.getUsers = async (req, res, next) => {
+  try {
+    const { role } = req.query;
+    const filter = {};
+    
+    if (role) {
+      filter.role = role;
+    }
+    
+    const users = await User.find(filter)
+      .select('name email role')
+      .sort({ name: 1 });
+    
+    res.json({
+      success: true,
+      data: users
+    });
+  } catch (error) {
+    console.error('Get Users Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
 
 // Get kompetensi user yang sedang login
 exports.getMyCompetencies = async (req, res, next) => {

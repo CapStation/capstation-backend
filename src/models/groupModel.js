@@ -38,10 +38,10 @@ const groupSchema = new Schema({
 });
 
 groupSchema.virtual('memberCount').get(function() {
-  return this.members.length;
+  return this.members ? this.members.length : 0;
 });
 groupSchema.virtual('projectCount').get(function() {
-  return this.projects.length;
+  return this.projects ? this.projects.length : 0;
 });
 
 groupSchema.index({ owner: 1 });
@@ -53,6 +53,24 @@ groupSchema.pre('save', function(next) {
     this.members.unshift(this.owner); // Add owner di posisi pertama
   }
   next();
+});
+
+// Post-save middleware to sync members to projects
+groupSchema.post('save', async function(doc) {
+  try {
+    // Only sync if members field was actually modified
+    if (this.isModified && this.isModified('members')) {
+      const Project = mongoose.model('Project');
+      const result = await Project.updateMany(
+        { group: doc._id },
+        { $set: { members: doc.members } }
+      );
+      console.log(`✅ Synced ${doc.members.length} members to ${result.modifiedCount} projects in group ${doc.name}`);
+    }
+  } catch (error) {
+    console.error('❌ Error syncing members to projects:', error);
+  }
+  // No next() needed for post middleware
 });
 
 // Method check apakah user adalah member

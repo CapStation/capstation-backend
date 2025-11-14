@@ -36,18 +36,6 @@ class DocumentService {
         ]
       };
       
-      // add search filter
-      if (search) {
-        query.$and = query.$and || [];
-        query.$and.push({
-          $or: [
-            { title: { $regex: search, $options: 'i' } },
-            { description: { $regex: search, $options: 'i' } },
-            { originalName: { $regex: search, $options: 'i' } }
-          ]
-        });
-      }
-      
       // add specific filters
       if (documentType) query.documentType = documentType;
       if (capstoneCategory) query.capstoneCategory = capstoneCategory;
@@ -56,9 +44,55 @@ class DocumentService {
       const sort = {};
       sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
       
+      // If there's a search term, we need to use aggregation to search in populated fields
+      if (search) {
+        const Project = require('../models/Project');
+        const User = require('../models/userModel');
+        
+        // Find matching projects
+        const matchingProjects = await Project.find({
+          title: { $regex: search, $options: 'i' }
+        }).select('_id').lean();
+        const projectIds = matchingProjects.map(p => p._id);
+        
+        // Find matching users (students and supervisors)
+        const matchingUsers = await User.find({
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { username: { $regex: search, $options: 'i' } }
+          ]
+        }).select('_id').lean();
+        const userIds = matchingUsers.map(u => u._id);
+        
+        // Find projects with matching supervisors
+        const projectsWithMatchingSupervisors = await Project.find({
+          $or: [
+            { supervisor: { $in: userIds } },
+            { 'members.user': { $in: userIds } }
+          ]
+        }).select('_id').lean();
+        const supervisorProjectIds = projectsWithMatchingSupervisors.map(p => p._id);
+        
+        // Combine all project IDs
+        const allProjectIds = [...new Set([...projectIds, ...supervisorProjectIds])];
+        
+        // Add search filter
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { title: { $regex: search, $options: 'i' } },
+            { description: { $regex: search, $options: 'i' } },
+            { originalName: { $regex: search, $options: 'i' } },
+            { project: { $in: allProjectIds } },
+            { uploadedBy: { $in: userIds } }
+          ]
+        });
+      }
+      
       const [documents, total] = await Promise.all([
         this.model.find(query)
           .populate('project', 'title tema status academicYear')
+          .populate('uploadedBy', 'name username email')
           .select('-fileData') // Exclude fileData for performance
           .sort(sort)
           .skip(skip)
@@ -104,11 +138,45 @@ class DocumentService {
       if (filters.documentType) query.documentType = filters.documentType;
       if (filters.project) query.project = filters.project;
       if (filters.mimeType) query.mimeType = filters.mimeType;
+      
+      // Enhanced search - search in project title, user names, and document fields
       if (filters.search) {
+        const Project = require('../models/Project');
+        const User = require('../models/userModel');
+        
+        // Find matching projects
+        const matchingProjects = await Project.find({
+          title: { $regex: filters.search, $options: 'i' }
+        }).select('_id').lean();
+        const projectIds = matchingProjects.map(p => p._id);
+        
+        // Find matching users
+        const matchingUsers = await User.find({
+          $or: [
+            { name: { $regex: filters.search, $options: 'i' } },
+            { username: { $regex: filters.search, $options: 'i' } }
+          ]
+        }).select('_id').lean();
+        const userIds = matchingUsers.map(u => u._id);
+        
+        // Find projects with matching supervisors
+        const projectsWithMatchingSupervisors = await Project.find({
+          $or: [
+            { supervisor: { $in: userIds } },
+            { 'members.user': { $in: userIds } }
+          ]
+        }).select('_id').lean();
+        const supervisorProjectIds = projectsWithMatchingSupervisors.map(p => p._id);
+        
+        // Combine all project IDs
+        const allProjectIds = [...new Set([...projectIds, ...supervisorProjectIds])];
+        
         query.$or = [
           { title: { $regex: filters.search, $options: 'i' } },
           { description: { $regex: filters.search, $options: 'i' } },
-          { originalName: { $regex: filters.search, $options: 'i' } }
+          { originalName: { $regex: filters.search, $options: 'i' } },
+          { project: { $in: allProjectIds } },
+          { uploadedBy: { $in: userIds } }
         ];
       }
       
@@ -119,6 +187,7 @@ class DocumentService {
       const [documents, total] = await Promise.all([
         this.model.find(query)
           .populate('project', 'title tema category')
+          .populate('uploadedBy', 'name username email')
           .select('-fileData') 
           .sort(sort)
           .skip(skip)

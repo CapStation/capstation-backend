@@ -57,6 +57,9 @@ class ProjectController {
         });
       }
 
+      // Auto-copy members from group
+      projectData.members = group.members;
+
       const newProject = await this.projectService.createProject(projectData, userId);
 
       res.status(201).json({
@@ -335,6 +338,55 @@ class ProjectController {
       });
     } catch (error) {
       console.error('❌ Update project status error:', error.message);
+      res.status(400).json({
+        success: false,
+        message: error.message,
+        data: null
+      });
+    }
+  }
+
+  /**
+   * Update project group (manual assignment)
+   * PATCH /api/projects/:id/group
+   */
+  async updateProjectGroup(req, res) {
+    try {
+      const { id } = req.params;
+      const { groupId } = req.body;
+      const userId = req.user?._id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User tidak terautentikasi',
+          data: null
+        });
+      }
+
+      if (!groupId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Group ID harus diisi',
+          data: null
+        });
+      }
+
+      console.log('🔄 Update project group request:', {
+        projectId: id,
+        groupId,
+        userId
+      });
+
+      const updatedProject = await this.projectService.updateProjectGroup(id, groupId, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Group project berhasil diupdate dan members disinkronisasi',
+        data: updatedProject
+      });
+    } catch (error) {
+      console.error('❌ Update project group error:', error.message);
       res.status(400).json({
         success: false,
         message: error.message,

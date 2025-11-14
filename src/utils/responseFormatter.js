@@ -29,18 +29,22 @@ function truncateFileData(fileData, previewLength = 50) {
  */
 function formatDocumentsForResponse(documents) {
   if (!documents || !Array.isArray(documents)) {
-    return documents;
+    return [];
   }
   
   return documents.map(doc => {
-    if (doc.fileData) {
+    if (!doc) return doc;
+    
+    const docObj = doc.toObject ? doc.toObject() : doc;
+    
+    if (docObj.fileData) {
       return {
-        ...doc.toObject ? doc.toObject() : doc,
-        fileData: truncateFileData(doc.fileData),
-        _originalFileDataLength: doc.fileData.length
+        ...docObj,
+        fileData: truncateFileData(docObj.fileData),
+        _originalFileDataLength: docObj.fileData.length
       };
     }
-    return doc.toObject ? doc.toObject() : doc;
+    return docObj;
   });
 }
 
@@ -56,8 +60,11 @@ function formatProjectForResponse(project) {
   
   const projectObj = project.toObject ? project.toObject() : project;
   
-  if (projectObj.documents) {
+  // Format documents array
+  if (projectObj.documents && Array.isArray(projectObj.documents)) {
     projectObj.documents = formatDocumentsForResponse(projectObj.documents);
+  } else {
+    projectObj.documents = [];
   }
   
   return projectObj;

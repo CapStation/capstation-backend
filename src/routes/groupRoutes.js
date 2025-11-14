@@ -13,6 +13,7 @@ router.use(authMiddleware);
 
 router.post('/', groupController.createGroup.bind(groupController));
 router.get('/my', groupController.getMyGroup.bind(groupController));
+router.get('/:groupId', groupController.getGroupById.bind(groupController));
 router.put('/:groupId', groupController.updateGroup.bind(groupController));
 
 module.exports = router;

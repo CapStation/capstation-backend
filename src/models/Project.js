@@ -92,6 +92,7 @@ const projectSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  
   isActive: {
     type: Boolean,
     default: true
@@ -126,7 +127,7 @@ projectSchema.pre('save', async function(next) {
     this.updatedAt = Date.now();
   }
   
-  // Auto-assign group owner dan members jika group sudah dipilih
+  // Auto-assign group owner dan members jika group sudah dipilih (ONLY for NEW projects)
   if (this.group && this.isNew) {
     try {
       const Group = mongoose.model('Group');
@@ -137,9 +138,13 @@ projectSchema.pre('save', async function(next) {
         this.owner = group.owner;
         this.members = [...group.members];
         
-        // Add project reference ke group
-        group.projects.push(this._id);
-        await group.save();
+        // Add project reference ke group WITHOUT triggering save middleware
+        if (!group.projects.includes(this._id)) {
+          await Group.updateOne(
+            { _id: group._id },
+            { $addToSet: { projects: this._id } }
+          );
+        }
       }
     } catch (error) {
       return next(error);

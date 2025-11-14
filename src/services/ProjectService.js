@@ -36,12 +36,21 @@ class ProjectService {
       const newProject = new this.model({
         ...projectData,
         owner: ownerId,
-        members: members // Ensure members includes owner
+        members: members, // Ensure members includes owner
+        documents: [] // Initialize empty documents array
       });
 
       const savedProject = await newProject.save();
       
-      return await this.getProjectById(savedProject._id);
+      // Populate and return
+      const populatedProject = await this.model.findById(savedProject._id)
+        .populate('owner', 'name email role')
+        .populate('supervisor', 'name email role')
+        .populate('members', 'name email role')
+        .populate('group', 'name description')
+        .populate('documents');
+
+      return formatProjectForResponse(populatedProject);
     } catch (error) {
       throw new Error(`Gagal membuat project: ${error.message}`);
     }
@@ -277,6 +286,70 @@ class ProjectService {
   }
 
   /**
+   * Update group ID pada project dan sync members dari group
+   * @param {String} projectId - ID project yang akan diupdate
+   * @param {String} groupId - ID group baru
+   * @param {String} userId - ID user yang melakukan update
+   * @returns {Promise<Object>} Updated project
+   */
+  async updateProjectGroup(projectId, groupId, userId) {
+    try {
+      // Validate ObjectId
+      if (!projectId.match(/^[0-9a-fA-F]{24}$/)) {
+        throw new Error('Project ID tidak valid');
+      }
+      if (!groupId.match(/^[0-9a-fA-F]{24}$/)) {
+        throw new Error('Group ID tidak valid');
+      }
+
+      // Find project
+      const project = await this.model.findById(projectId);
+      if (!project) {
+        throw new Error('Project tidak ditemukan');
+      }
+
+      // Check if user is owner or admin
+      const User = require('../models/User');
+      const user = await User.findById(userId);
+      
+      const isOwner = project.owner.toString() === userId.toString();
+      const isAdmin = user && (user.role === 'admin' || user.role === 'dosen');
+      
+      if (!isOwner && !isAdmin) {
+        throw new Error('Hanya owner project atau admin yang bisa mengubah group');
+      }
+
+      // Validate group exists
+      const Group = require('../models/groupModel');
+      const group = await Group.findById(groupId).populate('members', 'name email role');
+      
+      if (!group) {
+        throw new Error('Group tidak ditemukan');
+      }
+
+      // Update project group and sync members
+      project.group = groupId;
+      project.members = group.members.map(m => m._id);
+      
+      await project.save({ validateBeforeSave: false });
+
+      // Return populated project
+      const updatedProject = await this.model.findById(projectId)
+        .populate('owner', 'name email role')
+        .populate('supervisor', 'name email role')
+        .populate('members', 'name email role')
+        .populate('group', 'name description')
+        .populate('documents');
+
+      console.log(`✅ Project ${projectId} group updated to ${groupId}, synced ${group.members.length} members`);
+      
+      return formatProjectForResponse(updatedProject);
+    } catch (error) {
+      throw new Error(`Gagal mengupdate group project: ${error.message}`);
+    }
+  }
+
+  /**
    * Mendapatkan project yang bisa dilanjutkan (untuk capstone yang accepted)
    * @param {Object} filters 
    * @returns {Promise<Object>} 
@@ -301,9 +374,10 @@ class ProjectService {
     try {
       const project = await this.model
         .findById(projectId)
-        .populate('owner', 'name email')
-        .populate('supervisor', 'name email')
-        .populate('members', 'name email')
+        .populate('owner', 'name email role')
+        .populate('supervisor', 'name email role')
+        .populate('members', 'name email role')
+        .populate('group', 'name description')
         .populate('documents');
 
       if (!project) {
@@ -349,9 +423,18 @@ class ProjectService {
         console.log('✅ Member access granted for project update');
       }
 
-      // Update project
-      Object.assign(project, updateData);
-      const updatedProject = await project.save();
+      // Update project - only update allowed fields
+      const allowedFields = ['title', 'description', 'tema', 'status', 'capstoneStatus', 
+                             'academicYear', 'supervisor', 'tags'];
+      
+      allowedFields.forEach(field => {
+        if (updateData.hasOwnProperty(field) && updateData[field] !== undefined) {
+          project[field] = updateData[field];
+        }
+      });
+
+      // Save without validation to avoid issues with unchanged required fields (like group)
+      const updatedProject = await project.save({ validateBeforeSave: false });
 
       return await this.getProjectById(updatedProject._id);
     } catch (error) {
