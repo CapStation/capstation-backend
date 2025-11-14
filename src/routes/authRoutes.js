@@ -65,7 +65,7 @@ router.get(
   }),
   async (req, res) => {
     const setupToken = generateSetupToken(req.user);
-    const frontend = process.env.FRONTEND_URL || "http://localhost:5000";
+    const frontend = process.env.FRONTEND_URL || "http://localhost:3000";
     const redirect = `${frontend}/oauth-setup?token=${encodeURIComponent(
       setupToken
     )}`;

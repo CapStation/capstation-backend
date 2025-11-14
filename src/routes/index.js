@@ -24,7 +24,7 @@ router.get('/health', (req, res) => {
 
 
 router.use('/auth', authRoutes);
-router.use('/auth/oauth', oauthRoutes);
+router.use('/oauth', oauthRoutes);
 router.use('/projects', projectRoutes);
 router.use('/users', userRoutes);
 router.use('/announcements', announcementRoutes);
