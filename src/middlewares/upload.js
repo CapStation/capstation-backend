@@ -9,7 +9,7 @@ const storage = multer.memoryStorage();
 const fileFilter = FileValidationManager.getMulterFileFilter();
 
 const upload = multer({
-  storage: storage, // Memory storage untuk base64
+  storage: storage,
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB limit
     files: 10, // Maksimal 10 files per upload
@@ -19,7 +19,35 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-console.log('📁 Multer upload middleware configured');
+console.log('Multer upload middleware configured');
+
+// Create upload array for multiple files
+const uploadArray = (fieldname, maxCount = 10) => {
+  return (req, res, next) => {
+    console.log(`🔄 upload.array('${fieldname}', ${maxCount}) middleware started`);
+    console.log('📦 Request headers:', {
+      'content-type': req.headers['content-type'],
+      'content-length': req.headers['content-length']
+    });
+    
+    const uploadHandler = upload.array(fieldname, maxCount);
+    uploadHandler(req, res, (err) => {
+      if (err) {
+        console.error(`❌ upload.array('${fieldname}') error:`, err);
+        return next(err);
+      }
+      
+      console.log(`✅ upload.array('${fieldname}') completed successfully`);
+      console.log('📎 Files info:', req.files ? req.files.map(f => ({
+        originalname: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size
+      })) : 'No files');
+      
+      next();
+    });
+  };
+};
 
 // Create a wrapper for upload.single with logging
 const uploadSingle = (fieldname) => {
@@ -87,5 +115,6 @@ const handleMulterError = (error, req, res, next) => {
 module.exports = {
   upload,
   uploadSingle,
+  uploadArray,
   handleMulterError
 };
