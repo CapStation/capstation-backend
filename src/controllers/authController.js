@@ -73,7 +73,7 @@ exports.forgotPassword = async (req, res, next) => {
     user.resetTokenExpires = new Date(Date.now() + RESET_MINUTES * 60 * 1000);
     await user.save();
 
-    const resetUrl = `${process.env.FRONTEND_URL || process.env.APP_BASE_URL || 'http://localhost:5000'}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
     await mailer.sendResetPasswordEmail(email, user.name, resetUrl).catch(e => console.warn('Email error', e));
     return res.json({ message: 'If account exists, a reset email has been sent.' });
   } catch (err) { next(err); }
@@ -91,6 +91,10 @@ exports.resetPassword = async (req, res, next) => {
     user.resetToken = null;
     user.resetTokenExpires = null;
     await user.save();
+    
+    // Send password change confirmation email
+    await mailer.sendPasswordChangeConfirmation(email, user.name).catch(e => console.warn('Email error', e));
+    
     return res.json({ message: 'Password has been reset' });
   } catch (err) { next(err); }
 };
