@@ -84,7 +84,7 @@ class ProjectService {
         owner           // Added owner filter for my-projects
       } = filters;
 
-      const query = { isActive: true };
+      const query = {};
 
       // Filter berdasarkan owner (untuk my-projects)
       if (owner) {
@@ -458,9 +458,9 @@ class ProjectService {
       }
 
       let updateData = {};
-      const validCapstoneStatuses = ['pending', 'accepted', 'rejected'];
+      const validCapstoneStatuses = ['new', 'pending', 'accepted', 'rejected'];
       if (!validCapstoneStatuses.includes(status)) {
-        throw new Error('Status capstone tidak valid. Harus pending, accepted, atau rejected');
+        throw new Error('Status capstone tidak valid. Harus new, pending, accepted, atau rejected');
       }
       updateData.capstoneStatus = status;
 
@@ -471,7 +471,7 @@ class ProjectService {
   }
 
   /**
-   * Delete project (soft delete)
+   * Delete project (hard delete)
    * @param {String} projectId - ID project
    * @param {String} userId - ID user yang melakukan delete
    * @returns {Promise<Boolean>} Success status
@@ -489,8 +489,8 @@ class ProjectService {
         throw new Error('Tidak memiliki izin untuk menghapus project');
       }
 
-      project.isActive = false;
-      await project.save();
+      // Hard delete
+      await this.model.findByIdAndDelete(projectId);
 
       return true;
     } catch (error) {
@@ -508,7 +508,6 @@ class ProjectService {
     try {
       const query = {
         owner: ownerId,
-        isActive: true,
         ...filters
       };
 
@@ -533,16 +532,18 @@ class ProjectService {
   async getProjectStatistics() {
     try {
       const stats = await this.model.aggregate([
-        { $match: { isActive: true } },
         {
           $group: {
             _id: '$tema',
             count: { $sum: 1 },
             availableCount: {
-              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'accepted'] }, 1, 0] }
+              $sum: { $cond: [{ $eq: ['$status', 'dapat_dilanjutkan'] }, 1, 0] }
             },
-            closedCount: {
-              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'rejected'] }, 1, 0] }
+            activeCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] }
+            },
+            completedCount: {
+              $sum: { $cond: [{ $eq: ['$status', 'selesai'] }, 1, 0] }
             }
           }
         },
@@ -551,7 +552,8 @@ class ProjectService {
             tema: '$_id',
             total: '$count',
             available: '$availableCount',
-            closed: '$closedCount',
+            active: '$activeCount',
+            completed: '$completedCount',
             _id: 0
           }
         }
@@ -559,16 +561,18 @@ class ProjectService {
 
       // Total keseluruhan
       const totalStats = await this.model.aggregate([
-        { $match: { isActive: true } },
         {
           $group: {
             _id: null,
             totalProjects: { $sum: 1 },
             availableProjects: {
-              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'accepted'] }, 1, 0] }
+              $sum: { $cond: [{ $eq: ['$status', 'dapat_dilanjutkan'] }, 1, 0] }
             },
-            closedProjects: {
-              $sum: { $cond: [{ $eq: ['$capstoneStatus', 'rejected'] }, 1, 0] }
+            activeProjects: {
+              $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] }
+            },
+            completedProjects: {
+              $sum: { $cond: [{ $eq: ['$status', 'selesai'] }, 1, 0] }
             }
           }
         }
@@ -579,7 +583,8 @@ class ProjectService {
         totalStats: totalStats[0] || {
           totalProjects: 0,
           availableProjects: 0,
-          closedProjects: 0
+          activeProjects: 0,
+          completedProjects: 0
         }
       };
     } catch (error) {
@@ -607,7 +612,7 @@ class ProjectService {
         limit = 10
       } = searchParams;
 
-      const query = { isActive: true };
+      const query = {};
 
       // Keyword search
       if (keyword) {

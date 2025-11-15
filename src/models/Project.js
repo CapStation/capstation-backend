@@ -26,14 +26,14 @@ const projectSchema = new mongoose.Schema({
   
   status: {
     type: String,
-    enum: ['active', 'completed', 'suspended', 'deactive'],
+    enum: ['inactive', 'active', 'selesai', 'dapat_dilanjutkan'],
     default: 'active'
   },
   
   capstoneStatus: {
     type: String,
-    enum: ['pending', 'accepted', 'rejected'],
-    default: 'pending',
+    enum: ['new', 'pending', 'accepted', 'rejected'],
+    default: 'new',
     required: [true, 'Status capstone harus diisi']
   },
   
@@ -91,12 +91,7 @@ const projectSchema = new mongoose.Schema({
   tags: [{
     type: String,
     trim: true
-  }],
-  
-  isActive: {
-    type: Boolean,
-    default: true
-  }
+  }]
 }, {
   timestamps: {
     currentTime: () => {
