@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const capstoneController = require('../controllers/capstoneController');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+
+const { authMiddleware, requireRole } = require('../middlewares/authMiddleware');
 
 router.get('/:id', authMiddleware, capstoneController.getCapstoneById);
 

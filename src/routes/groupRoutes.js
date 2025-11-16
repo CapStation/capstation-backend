@@ -1,16 +1,23 @@
 const express = require('express');
-const router = express.Router();
-const { 
-  getAllGroups, 
-  getGroupDetail,
-  getAvailableUsers,
-  inviteMember
-} = require('../controllers/groupController');
+const GroupController = require('../controllers/groupController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
-router.get('/', authMiddleware, getAllGroups); // melihat semua grup
-router.get('/:id', authMiddleware, getGroupDetail); // melihat detail salah satu grup
-router.get('/:id/available-users', authMiddleware, getAvailableUsers); // dapatkan user yang tersedia untuk diundang
-router.post('/:id/invite', authMiddleware, inviteMember); // mengundang member ke grup
+const router = express.Router();
+const groupController = new GroupController();
+
+// Public routes
+router.get('/', groupController.getAllGroups.bind(groupController));
+
+// Protected routes (require auth)
+router.use(authMiddleware);
+
+router.post('/', groupController.createGroup.bind(groupController));
+router.get('/my', groupController.getMyGroup.bind(groupController));
+router.get('/:groupId', groupController.getGroupById.bind(groupController));
+router.put('/:groupId', groupController.updateGroup.bind(groupController));
+
+// Additional routes from your branch (if these methods exist in controller)
+router.get('/:id/available-users', groupController.getAvailableUsers?.bind(groupController));
+router.post('/:id/invite', groupController.inviteMember?.bind(groupController));
 
 module.exports = router;
