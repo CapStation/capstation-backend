@@ -32,9 +32,11 @@ exports.register = async (req, res, next) => {
     });
     await user.save();
 
-    const verifyUrl = `${
-      process.env.APP_BASE_URL || "http://localhost:5000"
-    }/api/auth/verify?token=${verifyToken}&email=${encodeURIComponent(email)}`;
+    // Send verification email with frontend URL
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const verifyUrl = `${frontendUrl}/verify-email?token=${verifyToken}&email=${encodeURIComponent(
+      email
+    )}`;
     await mailer
       .sendVerificationEmail(email, name, verifyUrl)
       .catch((e) => console.warn("Email error", e));
@@ -63,6 +65,44 @@ exports.verifyEmail = async (req, res, next) => {
     user.verifyTokenExpires = null;
     await user.save();
     return res.json({ message: "Email verified" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// New POST endpoint for frontend verification flow
+exports.verifyEmailPost = async (req, res, next) => {
+  try {
+    const { token, email } = req.body;
+    if (!token || !email)
+      return res.status(400).json({
+        success: false,
+        message: "Token and email are required",
+      });
+
+    const user = await User.findOne({ email });
+    if (!user || user.verifyToken !== token)
+      return res.status(400).json({
+        success: false,
+        message: "Invalid verification token",
+      });
+
+    if (user.verifyTokenExpires && new Date() > user.verifyTokenExpires)
+      return res.status(400).json({
+        success: false,
+        message: "Verification link has expired. Please request a new one.",
+      });
+
+    // Mark user as verified
+    user.isVerified = true;
+    user.verifyToken = null;
+    user.verifyTokenExpires = null;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Email verified successfully! You can now log in.",
+    });
   } catch (err) {
     next(err);
   }

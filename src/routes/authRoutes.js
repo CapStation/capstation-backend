@@ -81,4 +81,15 @@ router.get("/google/failure", (req, res) =>
 // Email verification
 router.get("/verify", authController.verifyEmail);
 
+// Email verification (POST) - for frontend flow
+router.post(
+  "/verify-email",
+  [
+    body("token").notEmpty().withMessage("Token required"),
+    body("email").isEmail().withMessage("Valid email required"),
+  ],
+  validate,
+  authController.verifyEmailPost
+);
+
 module.exports = router;
