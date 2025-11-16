@@ -128,7 +128,14 @@ class ProjectService {
       
       try {
         console.log('🔍 Final query:', JSON.stringify(query, null, 2));
-        const projects = await this.model.find(query).limit(parseInt(limit));
+        const projects = await this.model
+          .find(query)
+          .populate('owner', 'fullName name username email')
+          .populate('supervisor', 'fullName name username email')
+          .populate('group')
+          .populate('members', 'fullName name username email')
+          .limit(parseInt(limit))
+          .sort({ updatedAt: -1 });
         console.log('📊 Found projects:', projects.length);
         
         return {
