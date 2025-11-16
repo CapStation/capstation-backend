@@ -10,6 +10,7 @@ const announcementRoutes = require('./announcementRoutes');
 const groupRoutes = require('./groupRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const userRoutes = require('./userRoutes');
+const competencyRoutes = require('./competencyRoutes');
 
 const router = express.Router();
 
@@ -27,6 +28,7 @@ router.use('/auth', authRoutes);
 router.use('/oauth', oauthRoutes);
 router.use('/projects', projectRoutes);
 router.use('/users', userRoutes);
+router.use('/competencies', competencyRoutes);
 router.use('/announcements', announcementRoutes);
 router.use('/groups', groupRoutes);
 router.use('/dashboard', dashboardRoutes);
