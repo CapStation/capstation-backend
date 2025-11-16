@@ -6,13 +6,11 @@ const capstoneRoutes = require('./capstoneRoutes');
 const groupRoutes = require('./groupRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const announcementRoutes = require('./announcementRoutes');
-const userRoutes = require('./userRoutes');
 
 router.use('/auth', authRoutes);
 router.use('/capstones', capstoneRoutes);
 router.use('/groups', groupRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/announcements', announcementRoutes);
-router.use('/users', userRoutes);
 
 module.exports = router;

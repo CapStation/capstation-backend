@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const connectDB = require('./configs/db');
 const routes = require('./routes');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 connectDB();
@@ -16,6 +17,7 @@ app.use(morgan('dev'));
 app.get('/health', (req, res) => res.json({ ok: true, time: new Date() }));
 
 app.use('/api', routes);
+app.use('/api/auth', authRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
