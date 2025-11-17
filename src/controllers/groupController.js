@@ -1,89 +1,128 @@
-const Group = require('../models/groupModel');
-const User = require('../models/userModel');
+const Group = require("../models/groupModel");
+const User = require("../models/userModel");
 
 /**
  * GroupController Class
  * Mengelola HTTP requests untuk group-related endpoints
  */
 class GroupController {
-  
   /**
    * Create new group
    * POST /api/groups
    */
   async createGroup(req, res) {
     try {
-      const { name, description, members = [] } = req.body;
+      const {
+        name,
+        description,
+        members = [],
+        inviteEmails = [],
+        maxMembers,
+      } = req.body;
       const userId = req.user?._id;
 
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: 'User tidak terautentikasi',
-          data: null
+          message: "User tidak terautentikasi",
+          data: null,
         });
       }
 
       if (!name) {
         return res.status(400).json({
           success: false,
-          message: 'Nama grup harus diisi',
-          data: null
+          message: "Nama grup harus diisi",
+          data: null,
         });
       }
 
       // Check apakah user sudah punya grup
-      const existingGroup = await Group.findOne({ owner: userId, isActive: true });
+      const existingGroup = await Group.findOne({
+        owner: userId,
+        isActive: true,
+      });
       if (existingGroup) {
         return res.status(400).json({
           success: false,
-          message: 'User sudah memiliki grup aktif. Satu user hanya bisa memiliki satu grup.',
-          data: null
+          message:
+            "User sudah memiliki grup aktif. Satu user hanya bisa memiliki satu grup.",
+          data: null,
         });
       }
 
-      // Validate members exist
+      // Validate and convert inviteEmails to user IDs
       let validMembers = [];
-      if (members.length > 0) {
+
+      // If inviteEmails provided (new approach)
+      if (inviteEmails && inviteEmails.length > 0) {
+        console.log("📧 Processing invite emails:", inviteEmails);
+        const invitedUsers = await User.find({
+          email: { $in: inviteEmails.map((e) => e.toLowerCase()) },
+        });
+
+        console.log(
+          "✅ Found users for emails:",
+          invitedUsers.map((u) => u.email)
+        );
+        validMembers = invitedUsers.map((user) => user._id);
+
+        if (invitedUsers.length !== inviteEmails.length) {
+          const foundEmails = invitedUsers.map((u) => u.email.toLowerCase());
+          const notFound = inviteEmails.filter(
+            (e) => !foundEmails.includes(e.toLowerCase())
+          );
+          console.warn("⚠️ Some emails not found:", notFound);
+        }
+      }
+      // If members provided directly (old approach)
+      else if (members.length > 0) {
         const memberUsers = await User.find({ _id: { $in: members } });
-        validMembers = memberUsers.map(user => user._id);
-        
+        validMembers = memberUsers.map((user) => user._id);
+
         if (memberUsers.length !== members.length) {
           return res.status(400).json({
             success: false,
-            message: 'Beberapa member tidak ditemukan',
-            data: null
+            message: "Beberapa member tidak ditemukan",
+            data: null,
           });
         }
       }
+
+      console.log("👥 Valid members to add:", validMembers);
 
       // Create group
       const newGroup = new Group({
         name,
         description,
         owner: userId,
-        members: validMembers // tambah otomatis owner otomatis - pre-save middleware
+        members: validMembers, // Owner will be added automatically by pre-save middleware
+        maxMembers: maxMembers || 5,
       });
 
       await newGroup.save();
-      
+
       await newGroup.populate([
-        { path: 'owner', select: 'name email' },
-        { path: 'members', select: 'name email' }
+        { path: "owner", select: "name email" },
+        { path: "members", select: "name email" },
       ]);
+
+      console.log(
+        "✅ Group created with members:",
+        newGroup.members.map((m) => m.email)
+      );
 
       res.status(201).json({
         success: true,
-        message: 'Grup berhasil dibuat',
-        data: newGroup
+        message: "Grup berhasil dibuat",
+        data: newGroup,
       });
-
     } catch (error) {
-      console.error('Create Group Error:', error);
+      console.error("Create Group Error:", error);
       res.status(500).json({
         success: false,
         message: error.message,
-        data: null
+        data: null,
       });
     }
   }
@@ -99,8 +138,8 @@ class GroupController {
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: 'User tidak terautentikasi',
-          data: null
+          message: "User tidak terautentikasi",
+          data: null,
         });
       }
 
@@ -109,38 +148,34 @@ class GroupController {
         $and: [
           { isActive: true },
           {
-            $or: [
-              { owner: userId },
-              { members: userId }
-            ]
-          }
-        ]
+            $or: [{ owner: userId }, { members: userId }],
+          },
+        ],
       }).populate([
-        { path: 'owner', select: 'name email role' },
-        { path: 'members', select: 'name email role' },
-        { path: 'projects', select: 'title description tema status createdAt' }
+        { path: "owner", select: "name email role" },
+        { path: "members", select: "name email role" },
+        { path: "projects", select: "title description tema status createdAt" },
       ]);
 
       if (!group) {
         return res.status(404).json({
           success: false,
-          message: 'User belum bergabung dalam grup manapun',
-          data: null
+          message: "User belum bergabung dalam grup manapun",
+          data: null,
         });
       }
 
       res.json({
         success: true,
-        message: 'Data grup berhasil diambil',
-        data: group
+        message: "Data grup berhasil diambil",
+        data: group,
       });
-
     } catch (error) {
-      console.error('Get My Group Error:', error);
+      console.error("Get My Group Error:", error);
       res.status(500).json({
         success: false,
         message: error.message,
-        data: null
+        data: null,
       });
     }
   }
@@ -157,40 +192,40 @@ class GroupController {
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: 'User tidak terautentikasi',
-          data: null
+          message: "User tidak terautentikasi",
+          data: null,
         });
       }
 
-      const group = await Group.findById(groupId)
-        .populate([
-          { path: 'owner', select: 'name email role' },
-          { path: 'members', select: 'name email role' },
-          { path: 'projects', select: 'title description tema status createdAt members', 
-            populate: { path: 'members', select: 'name email' } 
-          }
-        ]);
+      const group = await Group.findById(groupId).populate([
+        { path: "owner", select: "name email role" },
+        { path: "members", select: "name email role" },
+        {
+          path: "projects",
+          select: "title description tema status createdAt members",
+          populate: { path: "members", select: "name email" },
+        },
+      ]);
 
       if (!group) {
         return res.status(404).json({
           success: false,
-          message: 'Grup tidak ditemukan',
-          data: null
+          message: "Grup tidak ditemukan",
+          data: null,
         });
       }
 
       res.json({
         success: true,
-        message: 'Detail grup berhasil diambil',
-        data: group
+        message: "Detail grup berhasil diambil",
+        data: group,
       });
-
     } catch (error) {
-      console.error('Get Group By ID Error:', error);
+      console.error("Get Group By ID Error:", error);
       res.status(500).json({
         success: false,
         message: error.message,
-        data: null
+        data: null,
       });
     }
   }
@@ -206,26 +241,26 @@ class GroupController {
       // Build query
       let query = { isActive: true };
       if (search) {
-        query.name = { $regex: search, $options: 'i' };
+        query.name = { $regex: search, $options: "i" };
       }
 
       const skip = (page - 1) * limit;
-      
+
       const [groups, total] = await Promise.all([
         Group.find(query)
           .populate([
-            { path: 'owner', select: 'name email' },
-            { path: 'members', select: 'name email' }
+            { path: "owner", select: "name email" },
+            { path: "members", select: "name email" },
           ])
           .skip(skip)
           .limit(parseInt(limit))
           .sort({ createdAt: -1 }),
-        Group.countDocuments(query)
+        Group.countDocuments(query),
       ]);
 
       res.json({
         success: true,
-        message: 'Data grup berhasil diambil',
+        message: "Data grup berhasil diambil",
         data: groups,
         pagination: {
           page: parseInt(page),
@@ -233,16 +268,15 @@ class GroupController {
           total,
           pages: Math.ceil(total / limit),
           hasNext: page * limit < total,
-          hasPrev: page > 1
-        }
+          hasPrev: page > 1,
+        },
       });
-
     } catch (error) {
-      console.error('Get All Groups Error:', error);
+      console.error("Get All Groups Error:", error);
       res.status(500).json({
         success: false,
         message: error.message,
-        data: null
+        data: null,
       });
     }
   }
@@ -260,8 +294,8 @@ class GroupController {
       if (!userId) {
         return res.status(401).json({
           success: false,
-          message: 'User tidak terautentikasi',
-          data: null
+          message: "User tidak terautentikasi",
+          data: null,
         });
       }
 
@@ -269,8 +303,8 @@ class GroupController {
       if (!group) {
         return res.status(404).json({
           success: false,
-          message: 'Grup tidak ditemukan',
-          data: null
+          message: "Grup tidak ditemukan",
+          data: null,
         });
       }
 
@@ -278,8 +312,8 @@ class GroupController {
       if (!group.isOwner(userId)) {
         return res.status(403).json({
           success: false,
-          message: 'Hanya owner yang bisa mengupdate grup',
-          data: null
+          message: "Hanya owner yang bisa mengupdate grup",
+          data: null,
         });
       }
 
@@ -292,37 +326,34 @@ class GroupController {
         if (memberUsers.length !== members.length) {
           return res.status(400).json({
             success: false,
-            message: 'Beberapa member tidak ditemukan',
-            data: null
+            message: "Beberapa member tidak ditemukan",
+            data: null,
           });
         }
         group.members = members; // Owner akan ditambahkan otomatis via pre-save
       }
 
       await group.save();
-      
+
       await group.populate([
-        { path: 'owner', select: 'name email' },
-        { path: 'members', select: 'name email' }
+        { path: "owner", select: "name email" },
+        { path: "members", select: "name email" },
       ]);
 
       res.json({
         success: true,
-        message: 'Grup berhasil diupdate',
-        data: group
+        message: "Grup berhasil diupdate",
+        data: group,
       });
-
     } catch (error) {
-      console.error('Update Group Error:', error);
+      console.error("Update Group Error:", error);
       res.status(500).json({
         success: false,
         message: error.message,
-        data: null
+        data: null,
       });
     }
   }
-
 }
 
 module.exports = GroupController;
-
