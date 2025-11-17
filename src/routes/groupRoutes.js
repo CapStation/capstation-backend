@@ -11,13 +11,14 @@ router.get('/', groupController.getAllGroups.bind(groupController));
 // Protected routes (require auth)
 router.use(authMiddleware);
 
-router.post('/', groupController.createGroup.bind(groupController));
+// Specific routes 
 router.get('/my', groupController.getMyGroup.bind(groupController));
+router.post('/', groupController.createGroup.bind(groupController));
+
+// Dynamic routes
 router.get('/:groupId', groupController.getGroupById.bind(groupController));
 router.put('/:groupId', groupController.updateGroup.bind(groupController));
-
-// Additional routes from your branch (if these methods exist in controller)
-router.get('/:id/available-users', groupController.getAvailableUsers?.bind(groupController));
-router.post('/:id/invite', groupController.inviteMember?.bind(groupController));
+router.get('/:groupId/available-users', groupController.getAvailableUsers.bind(groupController));
+router.post('/:groupId/invite', groupController.inviteMember.bind(groupController));
 
 module.exports = router;

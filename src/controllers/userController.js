@@ -272,6 +272,56 @@ exports.getUserProfile = async (req, res, next) => {
   }
 };
 
+// Search user by email (untuk invite anggota via email)
+exports.searchUsersByEmail = async (req, res, next) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email parameter wajib diisi',
+        data: null,
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // 🔍 Cari user dengan email yang sama (abaikan huruf besar/kecil)
+    const user = await User.findOne({
+      email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+    })
+      .select('_id name email role')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: `User dengan email "${email}" tidak ditemukan`,
+        data: null,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'User berhasil ditemukan',
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error('Search Users By Email Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || 'Terjadi kesalahan saat mencari user',
+      data: null,
+    });
+  }
+};
+
 // Search users by competency
 exports.searchUsersByCompetency = async (req, res, next) => {
   try {
