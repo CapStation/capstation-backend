@@ -15,14 +15,8 @@ try {
 }
 
 const routes = require("./routes");
-const authRoutes = require('./routes/authRoutes');
 
 const app = express();
-
-// Note: Database connection is now handled in:
-// - api/index.js for Vercel serverless deployment
-// - server.js for local development
-// This prevents duplicate connection attempts
 
 // Security middleware
 app.use(
@@ -56,7 +50,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Passport initialization
 let useMock = false;
 try {
-  require("passport");
+  passport = require("passport");
   try {
     require("./configs/passport")();
     app.use(passport.initialize());
@@ -88,7 +82,6 @@ app.get("/health", (req, res) => res.json({ ok: true, time: new Date() }));
 
 // API routes
 app.use("/api", routes);
-app.use('/api/auth', authRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {

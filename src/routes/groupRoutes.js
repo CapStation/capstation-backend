@@ -18,7 +18,9 @@ router.post('/', groupController.createGroup.bind(groupController));
 // Dynamic routes
 router.get('/:groupId', groupController.getGroupById.bind(groupController));
 router.put('/:groupId', groupController.updateGroup.bind(groupController));
+router.delete('/:groupId', groupController.deleteGroup.bind(groupController));
 router.get('/:groupId/available-users', groupController.getAvailableUsers.bind(groupController));
 router.post('/:groupId/invite', groupController.inviteMember.bind(groupController));
+router.post('/:groupId/remove-member', groupController.removeMember.bind(groupController));
 
 module.exports = router;

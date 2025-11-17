@@ -285,12 +285,14 @@ exports.searchUsersByEmail = async (req, res, next) => {
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    // Trim saja, case-insensitive akan di-handle oleh collation
+    const normalizedEmail = email.trim();
 
     // 🔍 Cari user dengan email yang sama (abaikan huruf besar/kecil)
     const user = await User.findOne({
-      email: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+      email: normalizedEmail,
     })
+      .collation({ locale: 'en', strength: 2 }) // strength:2 → case-insensitive
       .select('_id name email role')
       .lean();
 
