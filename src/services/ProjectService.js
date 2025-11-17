@@ -430,6 +430,29 @@ class ProjectService {
         console.log('✅ Member access granted for project update');
       }
 
+      // Check if admin is changing owner
+      const user = await User.findById(userId);
+      const isAdmin = user && user.role === 'admin';
+      
+      if (isAdmin && updateData.owner && updateData.owner !== project.owner?.toString()) {
+        // Admin is changing owner - add old owner to members if not already there
+        const oldOwner = project.owner;
+        const newOwner = updateData.owner;
+        
+        console.log('👑 Admin switching project owner:', { oldOwner, newOwner });
+        
+        // Add old owner to members if not already included
+        if (oldOwner && !project.members.some(m => m.toString() === oldOwner.toString())) {
+          project.members.push(oldOwner);
+        }
+        
+        // Remove new owner from members if they're currently a member
+        project.members = project.members.filter(m => m.toString() !== newOwner.toString());
+        
+        // Set new owner
+        project.owner = newOwner;
+      }
+      
       // Update project - only update allowed fields
       const allowedFields = ['title', 'description', 'tema', 'status', 'capstoneStatus', 
                              'academicYear', 'supervisor', 'tags'];

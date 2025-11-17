@@ -91,6 +91,7 @@ class DocumentService {
       
       const [documents, total] = await Promise.all([
         this.model.find(query)
+          .allowDiskUse(true)
           .populate('project', 'title tema status academicYear')
           .populate('uploadedBy', 'name username email')
           .select('-fileData') // Exclude fileData for performance
@@ -186,6 +187,7 @@ class DocumentService {
       
       const [documents, total] = await Promise.all([
         this.model.find(query)
+          .allowDiskUse(true)
           .populate('project', 'title tema category')
           .populate('uploadedBy', 'name username email')
           .select('-fileData') 

@@ -675,6 +675,12 @@ class ProjectController {
     this.getProjectsByTema = this.getProjectsByTema.bind(this);
     this.getProjectDocuments = this.getProjectDocuments.bind(this);
     
+    // export
+    this.exportProjects = this.exportProjects.bind(this);
+    
+    // group update
+    this.updateProjectGroup = this.updateProjectGroup.bind(this);
+    
     return this;
   }
 
@@ -699,6 +705,81 @@ class ProjectController {
       res.status(500).json({
         success: false,
         message: 'Gagal mengambil tema tersedia',
+        data: null
+      });
+    }
+  }
+
+  /**
+   * Export projects to CSV
+   * GET /api/projects/export
+   */
+  async exportProjects(req, res) {
+    try {
+      // Get all projects using the service method
+      const result = await this.projectService.getProjectsByFilter({
+        page: 1,
+        limit: 999999 // Get all projects
+      });
+
+      const projects = result.projects || [];
+
+      // Format data for CSV
+      const csvData = projects.map(project => ({
+        'Judul': project.title || '',
+        'Tema': project.tema || '',
+        'Status': project.status || '',
+        'Tahun Akademik': project.academicYear || '',
+        'Keywords': project.keywords || '',
+        'Kategori': project.category || '',
+        'Deskripsi': project.description ? project.description.replace(/\n/g, ' ').substring(0, 200) : '',
+        'Jumlah Anggota': project.members?.length || 0,
+        'Nama Anggota': project.members?.map(m => m.name || m.username).join('; ') || '',
+        'Dibuat Oleh': project.createdBy?.name || project.createdBy?.username || project.owner?.name || project.owner?.username || '',
+        'Tanggal Dibuat': project.createdAt ? new Date(project.createdAt).toLocaleDateString('id-ID') : '',
+        'Terakhir Diperbarui': project.updatedAt ? new Date(project.updatedAt).toLocaleDateString('id-ID') : ''
+      }));
+
+      // Convert to CSV format
+      if (csvData.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tidak ada proyek untuk diekspor',
+          data: null
+        });
+      }
+
+      const headers = Object.keys(csvData[0]);
+      const csvRows = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header] || '';
+            // Escape quotes and wrap in quotes if contains comma or quotes
+            const escaped = String(value).replace(/"/g, '""');
+            return escaped.includes(',') || escaped.includes('"') || escaped.includes('\n') || escaped.includes(';')
+              ? `"${escaped}"` 
+              : escaped;
+          }).join(',')
+        )
+      ];
+
+      const csv = csvRows.join('\n');
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=proyek_capstation_${new Date().toISOString().split('T')[0]}.csv`);
+      
+      // Add BOM for Excel UTF-8 compatibility
+      res.write('\uFEFF');
+      res.end(csv);
+
+    } catch (error) {
+      console.error('Export Projects Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengekspor proyek',
+        error: error.message,
         data: null
       });
     }
