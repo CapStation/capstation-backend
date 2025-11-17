@@ -13,6 +13,13 @@ const {
 // User list route (with optional role filter)
 router.get('/', authMiddleware, userController.getUsers);
 
+// Export users route
+router.get('/export', authMiddleware, userController.exportUsers);
+
+// Admin: Update and delete user
+router.put('/:userId', authMiddleware, userController.updateUser);
+router.delete('/:userId', authMiddleware, userController.deleteUser);
+
 // Profile routes
 router.get('/profile', authMiddleware, userController.getMyProfile);
 router.get('/profile/:userId', authMiddleware, validateUserId, userController.getUserProfile);
