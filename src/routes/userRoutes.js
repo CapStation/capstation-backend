@@ -16,6 +16,9 @@ router.get("/", authMiddleware, userController.getUsers);
 // Export users route
 router.get("/export", authMiddleware, userController.exportUsers);
 
+// Admin: Create new user
+router.post("/", authMiddleware, userController.createUser);
+
 // Validate user role (Admin only)
 router.patch('/:userId/validate-role', authMiddleware, userController.validateUserRole);
 
