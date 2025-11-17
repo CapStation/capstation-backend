@@ -690,3 +690,65 @@ exports.validateUserRole = async (req, res) => {
     });
   }
 };
+
+// Admin: Create new user
+exports.createUser = async (req, res) => {
+  try {
+    const { name, email, password, role, isVerified, roleApproved } = req.body;
+
+    // Validation
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nama, email, dan password harus diisi'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'Email sudah terdaftar'
+      });
+    }
+
+    // Hash password
+    const bcrypt = require('bcrypt');
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user
+    const user = new User({
+      name,
+      email,
+      passwordHash,
+      role: role || 'mahasiswa',
+      isVerified: isVerified || false,
+      roleApproved: roleApproved || false,
+    });
+
+    await user.save();
+
+    // Return user without sensitive data
+    const userData = user.toObject();
+    delete userData.passwordHash;
+    delete userData.resetToken;
+    delete userData.resetTokenExpires;
+    delete userData.verifyToken;
+    delete userData.verifyTokenExpires;
+
+    res.status(201).json({
+      success: true,
+      message: 'Pengguna berhasil dibuat',
+      data: userData
+    });
+
+  } catch (error) {
+    console.error('Create User Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal membuat pengguna',
+      error: error.message
+    });
+  }
+};
