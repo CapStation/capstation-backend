@@ -1,8 +1,7 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/userModel');
+const jwt = require("jsonwebtoken");
+const User = require("../models/userModel");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
-const User = require("../models/userModel");
 const mailer = require("../services/mailService");
 const { generateToken } = require("../middlewares/authMiddleware");
 const VERIFY_HOURS = Number(process.env.VERIFY_TOKEN_HOURS || 24);
@@ -195,25 +194,27 @@ exports.verifyEmail = async (req, res) => {
     const { token, email } = req.query;
 
     if (!token || !email) {
-      return res.status(400).json({ message: 'Token atau email tidak ada' });
+      return res.status(400).json({ message: "Token atau email tidak ada" });
     }
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findOne({ _id: decoded.userId, email });
 
     if (!user) {
-      return res.status(404).json({ message: 'User tidak ditemukan' });
+      return res.status(404).json({ message: "User tidak ditemukan" });
     }
 
     if (user.isVerified) {
-      return res.send('Email kamu sudah terverifikasi!');
+      return res.send("Email kamu sudah terverifikasi!");
     }
 
     user.isVerified = true;
     await user.save();
 
-    return res.send('Email berhasil diverifikasi. Sekarang kamu bisa login!');
+    return res.send("Email berhasil diverifikasi. Sekarang kamu bisa login!");
   } catch (err) {
     console.error(err);
-    return res.status(400).json({ message: 'Token tidak valid atau sudah kadaluarsa' });
+    return res
+      .status(400)
+      .json({ message: "Token tidak valid atau sudah kadaluarsa" });
   }
 };
