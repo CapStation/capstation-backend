@@ -29,6 +29,7 @@ router.post(
   authController.login
 );
 
+// Forgot password
 router.post(
   "/forgot-password",
   [body("email").isEmail().withMessage("Valid email required")],
@@ -78,7 +79,7 @@ router.get("/google/failure", (req, res) =>
   res.status(401).json({ message: "Google auth failed" })
 );
 
-// Email verification
+// Email verification (GET)
 router.get("/verify", authController.verifyEmail);
 
 // Email verification (POST) - for frontend flow

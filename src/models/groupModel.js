@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const groupSchema = new Schema({
@@ -48,10 +48,20 @@ groupSchema.index({ owner: 1 });
 groupSchema.index({ isActive: 1 });
 
 // Middleware untuk memastikan owner ada di members
-groupSchema.pre('save', function(next) {
-  if (!this.members.includes(this.owner)) {
-    this.members.unshift(this.owner); // Add owner di posisi pertama
+groupSchema.pre('save', function (next) {
+  const ownerId = this.owner?.toString();
+
+  if (ownerId) {
+    const alreadyInMembers = this.members.some(
+      (m) => m.toString() === ownerId
+    );
+
+    if (!alreadyInMembers) {
+      // tambahkan owner di posisi pertama
+      this.members.unshift(this.owner);
+    }
   }
+
   next();
 });
 

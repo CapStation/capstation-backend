@@ -7,6 +7,18 @@ const Project = require('../models/Project');
 const router = express.Router();
 const projectController = new ProjectController().bind();
 
+// Debug: log controller handler types to catch invalid handlers
+try {
+	console.log('ProjectController handlers:', {
+		getAvailableTemas: typeof projectController.getAvailableTemas,
+		getCategories: typeof projectController.getCategories,
+		getProjectStatistics: typeof projectController.getProjectStatistics,
+		advancedSearch: typeof projectController.advancedSearch
+	});
+} catch (e) {
+	console.error('Error while inspecting ProjectController handlers:', e);
+}
+
 // Public routes (no auth required)
 router.get('/temas', projectController.getAvailableTemas);
 router.get('/categories', projectController.getCategories);
@@ -22,6 +34,13 @@ router.get('/available', projectController.getAvailableProjects);
 router.get('/', projectController.getAllProjects);
 
 // Protected routes (auth required) - MOVE my-projects BEFORE /:id route
+console.log('ProjectController additional handlers:', {
+	getMyProjects: typeof projectController.getMyProjects,
+	getProjectById: typeof projectController.getProjectById,
+	createProject: typeof projectController.createProject,
+	getProjectDocuments: typeof projectController.getProjectDocuments
+});
+
 router.get('/my-projects', authMiddleware, projectController.getMyProjects);
 
 // Public route for getting project by ID
@@ -47,5 +66,9 @@ router.patch('/:id/group', requireOwnershipOrRole(Project, 'owner', 'id', 'admin
 
 // Delete project (only owner/members or admin can delete)
 router.delete('/:id', requireOwnershipOrRole(Project, 'members', 'id', 'admin'), projectController.deleteProject);
+
+router.get('/:id/competencies', projectController.getProjectCompetencies);
+router.post('/:id/competencies', authMiddleware, requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.addProjectCompetency);
+router.delete('/:id/competencies/:index', authMiddleware, requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.removeProjectCompetency);
 
 module.exports = router;

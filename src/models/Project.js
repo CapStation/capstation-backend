@@ -92,11 +92,25 @@ const projectSchema = new mongoose.Schema({
     responseDate: Date,
     notes: String
   }],
+
+  competencies: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Competency'
+    }],
+    validate: {
+      validator: function(arr) {
+        return arr.length <= 20;
+      },
+      message: 'Maksimal 20 kompetensi yang dapat ditambahkan'
+    }
+  },
   
   tags: [{
     type: String,
     trim: true
   }]
+
 }, {
   timestamps: {
     currentTime: () => {
@@ -116,6 +130,7 @@ projectSchema.index({ tema: 1, academicYear: 1 });
 projectSchema.index({ academicYear: 1 });
 projectSchema.index({ owner: 1 });
 projectSchema.index({ title: 'text', description: 'text' });
+projectSchema.index({ competencies: 1 });
 
 projectSchema.virtual('documentCount').get(function() {
   return this.documents ? this.documents.length : 0;
