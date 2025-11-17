@@ -150,6 +150,7 @@ class ProjectController {
         .populate('supervisor', 'fullName name username email')
         .populate('group')
         .populate('members', 'fullName name username email')
+        .populate('competencies', 'name category description') 
         .limit(100)
         .sort({ updatedAt: -1 });
 

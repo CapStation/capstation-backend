@@ -48,4 +48,8 @@ router.patch('/:id/group', requireOwnershipOrRole(Project, 'owner', 'id', 'admin
 // Delete project (only owner/members or admin can delete)
 router.delete('/:id', requireOwnershipOrRole(Project, 'members', 'id', 'admin'), projectController.deleteProject);
 
+router.get('/:id/competencies', projectController.getProjectCompetencies);
+router.post('/:id/competencies', authMiddleware, requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.addProjectCompetency);
+router.delete('/:id/competencies/:index', authMiddleware, requireOwnershipOrRole(Project, 'members', 'id', 'admin', 'dosen'), projectController.removeProjectCompetency);
+
 module.exports = router;

@@ -134,6 +134,7 @@ class ProjectService {
           .populate('supervisor', 'fullName name username email')
           .populate('group')
           .populate('members', 'fullName name username email')
+          .populate('competencies', 'name category description')
           .limit(parseInt(limit))
           .sort({ updatedAt: -1 });
         console.log('📊 Found projects:', projects.length);
@@ -385,7 +386,8 @@ class ProjectService {
         .populate('supervisor', 'name email role')
         .populate('members', 'name email role')
         .populate('group', 'name description')
-        .populate('documents');
+        .populate('documents')
+        .populate('competencies', 'name category description'); 
 
       if (!project) {
         throw new Error('Project tidak ditemukan');
@@ -621,6 +623,202 @@ class ProjectService {
       throw new Error(`Gagal mengambil statistik project: ${error.message}`);
     }
   }
+  /**
+ * Get project competencies
+ * @param {String} projectId - ID project
+ * @returns {Promise<Array>} Array of competencies
+ */
+async getProjectCompetencies(projectId) {
+  try {
+    const project = await this.model
+      .findById(projectId)
+      .populate('competencies', 'name category description')
+      .select('competencies');
+
+    if (!project) {
+      throw new Error('Project tidak ditemukan');
+    }
+
+    return project.competencies || [];
+  } catch (error) {
+    throw new Error(`Gagal mengambil kompetensi project: ${error.message}`);
+  }
+}
+
+/**
+ * Add competency to project
+ * @param {String} projectId - ID project
+ * @param {String} competencyId - ID competency to add
+ * @param {String} userId - ID user yang melakukan update
+ * @returns {Promise<Array>} Updated competencies array
+ */
+async addProjectCompetency(projectId, competencyId, userId) {
+  try {
+    const project = await this.model.findById(projectId);
+    if (!project) {
+      throw new Error('Project tidak ditemukan');
+    }
+
+    // Check permission (owner, member, admin, or dosen)
+    const userIdString = userId.toString();
+    const isOwner = project.owner && project.owner.toString() === userIdString;
+    const isMember = project.members && project.members.some(m => m.toString() === userIdString);
+    
+    if (!isOwner && !isMember) {
+      const user = await User.findById(userId);
+      if (!user || (user.role !== 'admin' && user.role !== 'dosen')) {
+        throw new Error('Tidak memiliki izin untuk menambah kompetensi project ini');
+      }
+    }
+
+    // Check if competency exists
+    const Competency = require('../models/competencyModel');
+    const competency = await Competency.findOne({ _id: competencyId, isActive: true });
+    if (!competency) {
+      throw new Error('Kompetensi tidak ditemukan atau tidak aktif');
+    }
+
+    // Check if already added
+    if (project.competencies.some(c => c.toString() === competencyId)) {
+      throw new Error('Kompetensi sudah ditambahkan sebelumnya');
+    }
+
+    // Check limit
+    if (project.competencies.length >= 20) {
+      throw new Error('Maksimal 20 kompetensi yang dapat ditambahkan');
+    }
+
+    // Add competency
+    project.competencies.push(competencyId);
+    await project.save({ validateBeforeSave: false });
+
+    // Return populated competencies
+    const updatedProject = await this.model
+      .findById(projectId)
+      .populate('competencies', 'name category description')
+      .select('competencies');
+
+    return updatedProject.competencies;
+  } catch (error) {
+    throw new Error(`Gagal menambah kompetensi: ${error.message}`);
+  }
+}
+
+/**
+ * Remove competency from project by index
+ * @param {String} projectId - ID project
+ * @param {Number} index - Index of competency to remove
+ * @param {String} userId - ID user yang melakukan update
+ * @returns {Promise<Array>} Updated competencies array
+ */
+async removeProjectCompetency(projectId, index, userId) {
+  try {
+    const project = await this.model
+      .findById(projectId)
+      .populate('competencies', 'name category description');
+      
+    if (!project) {
+      throw new Error('Project tidak ditemukan');
+    }
+
+    // Check permission
+    const userIdString = userId.toString();
+    const isOwner = project.owner && project.owner.toString() === userIdString;
+    const isMember = project.members && project.members.some(m => m.toString() === userIdString);
+    
+    if (!isOwner && !isMember) {
+      const user = await User.findById(userId);
+      if (!user || (user.role !== 'admin' && user.role !== 'dosen')) {
+        throw new Error('Tidak memiliki izin untuk menghapus kompetensi project ini');
+      }
+    }
+
+    // Validate index
+    const competencyIndex = parseInt(index);
+    if (isNaN(competencyIndex) || competencyIndex < 0 || competencyIndex >= project.competencies.length) {
+      throw new Error('Index kompetensi tidak valid');
+    }
+
+    // Remove competency
+    project.competencies.splice(competencyIndex, 1);
+    await project.save({ validateBeforeSave: false });
+
+    // Return updated competencies
+    const updatedProject = await this.model
+      .findById(projectId)
+      .populate('competencies', 'name category description')
+      .select('competencies');
+
+    return updatedProject.competencies;
+  } catch (error) {
+    throw new Error(`Gagal menghapus kompetensi: ${error.message}`);
+  }
+}
+
+/**
+ * Update competency at specific index
+ * @param {String} projectId - ID project
+ * @param {Number} index - Index of competency to update
+ * @param {String} competencyId - New competency ID
+ * @param {String} userId - ID user yang melakukan update
+ * @returns {Promise<Array>} Updated competencies array
+ */
+async updateProjectCompetency(projectId, index, competencyId, userId) {
+  try {
+    const project = await this.model.findById(projectId);
+    if (!project) {
+      throw new Error('Project tidak ditemukan');
+    }
+
+    // Check permission
+    const userIdString = userId.toString();
+    const isOwner = project.owner && project.owner.toString() === userIdString;
+    const isMember = project.members && project.members.some(m => m.toString() === userIdString);
+    
+    if (!isOwner && !isMember) {
+      const user = await User.findById(userId);
+      if (!user || (user.role !== 'admin' && user.role !== 'dosen')) {
+        throw new Error('Tidak memiliki izin untuk mengupdate kompetensi project ini');
+      }
+    }
+
+    // Validate competency exists
+    const Competency = require('../models/competencyModel');
+    const competency = await Competency.findOne({ _id: competencyId, isActive: true });
+    if (!competency) {
+      throw new Error('Kompetensi tidak ditemukan atau tidak aktif');
+    }
+
+    // Validate index
+    const competencyIndex = parseInt(index);
+    if (isNaN(competencyIndex) || competencyIndex < 0 || competencyIndex >= project.competencies.length) {
+      throw new Error('Index kompetensi tidak valid');
+    }
+
+    // Check if new competency already exists (except at current index)
+    const existingIndex = project.competencies.findIndex((comp, idx) => 
+      idx !== competencyIndex && comp.toString() === competencyId
+    );
+    
+    if (existingIndex !== -1) {
+      throw new Error('Kompetensi sudah ada di project ini');
+    }
+
+    // Update competency
+    project.competencies[competencyIndex] = competencyId;
+    await project.save({ validateBeforeSave: false });
+
+    // Return updated competencies
+    const updatedProject = await this.model
+      .findById(projectId)
+      .populate('competencies', 'name category description')
+      .select('competencies');
+
+    return updatedProject.competencies;
+  } catch (error) {
+    throw new Error(`Gagal mengupdate kompetensi: ${error.message}`);
+  }
+}
 
   /**
    * Search projects dengan advanced filtering
