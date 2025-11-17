@@ -18,11 +18,6 @@ const routes = require("./routes");
 
 const app = express();
 
-// Note: Database connection is now handled in:
-// - api/index.js for Vercel serverless deployment
-// - server.js for local development
-// This prevents duplicate connection attempts
-
 // Security middleware
 app.use(
   helmet({
@@ -52,7 +47,7 @@ if (process.env.NODE_ENV === "development") {
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-app.use(passport.initialize());
+// Passport initialization
 let useMock = false;
 try {
   passport = require("passport");
@@ -66,6 +61,7 @@ try {
 } catch {
   useMock = true;
 }
+
 if (useMock) {
   console.warn("Auth fallback aktif. Pakai header x-user-id dan x-role");
   app.use((req, res, next) => {

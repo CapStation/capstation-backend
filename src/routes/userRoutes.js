@@ -21,13 +21,12 @@ router.put("/:userId", authMiddleware, userController.updateUser);
 router.delete("/:userId", authMiddleware, userController.deleteUser);
 
 // Profile routes
-router.get("/profile", authMiddleware, userController.getMyProfile);
-router.get(
-  "/profile/:userId",
-  authMiddleware,
-  validateUserId,
-  userController.getUserProfile
-);
+router.get('/profile', authMiddleware, userController.getMyProfile);
+router.get('/profile/:userId', authMiddleware, validateUserId, userController.getUserProfile);
+
+// Search routes 
+router.get('/search-by-email', authMiddleware, userController.searchUsersByEmail);
+router.get('/search', authMiddleware, validateCompetencySearch, userController.searchUsersByCompetency);
 
 // Competency CRUD routes
 router.get("/competencies", authMiddleware, userController.getMyCompetencies);
