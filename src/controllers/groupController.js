@@ -1,3 +1,4 @@
+// src/controllers/groupController.js
 const Group = require("../models/groupModel");
 const User = require("../models/userModel");
 
@@ -26,6 +27,7 @@ class GroupController {
           data: null,
         });
       }
+
       // Validasi maxMembers (1–100, integer)
       const maxMembersInt = parseInt(maxMembers, 10);
       if (
@@ -58,7 +60,7 @@ class GroupController {
         });
       }
 
-      // Check apakah user sudah punya grup
+      // Check apakah user sudah punya grup aktif sebagai owner
       const existingGroup = await Group.findOne({
         owner: userId,
         isActive: true,
@@ -75,28 +77,83 @@ class GroupController {
       // Validate and convert inviteEmails to user IDs
       let validMembers = [];
 
-      // If inviteEmails provided (new approach)
+      // Jika pakai inviteEmails
       if (inviteEmails && inviteEmails.length > 0) {
         console.log("📧 Processing invite emails:", inviteEmails);
+
+        const normalized = inviteEmails.map((e) => e.toLowerCase());
         const invitedUsers = await User.find({
-          email: { $in: inviteEmails.map((e) => e.toLowerCase()) },
+          email: { $in: normalized },
         });
 
         console.log(
           "✅ Found users for emails:",
           invitedUsers.map((u) => u.email)
         );
+
         validMembers = invitedUsers.map((user) => user._id);
 
         if (invitedUsers.length !== inviteEmails.length) {
           const foundEmails = invitedUsers.map((u) => u.email.toLowerCase());
-          const notFound = inviteEmails.filter(
-            (e) => !foundEmails.includes(e.toLowerCase())
+          const missing = normalized.filter(
+            (e) => !foundEmails.includes(e)
           );
-          console.warn("⚠️ Some emails not found:", notFound);
+          if (missing.length > 0) {
+            return res.status(400).json({
+              success: false,
+              message: `Beberapa email tidak ditemukan: ${missing.join(
+                ", "
+              )}`,
+              data: null,
+            });
+          }
+        }
+
+        // Cek apakah user yang diinvite sudah punya grup aktif (sebagai owner atau member)
+        const invitedIds = invitedUsers.map((u) => u._id);
+
+        const usersWithGroup = await Group.find({
+          $and: [
+            { isActive: true },
+            {
+              $or: [
+                { owner: { $in: invitedIds } }, // User adalah owner
+                { members: { $in: invitedIds } }, // User adalah member
+              ],
+            },
+          ],
+        })
+          .populate("owner", "email")
+          .populate("members", "email");
+
+        const usersWithGroupEmails = usersWithGroup.reduce((emails, group) => {
+          invitedUsers.forEach((invitedUser) => {
+            const isOwner =
+              group.owner &&
+              group.owner._id.toString() === invitedUser._id.toString();
+            const isMember = group.members.some(
+              (m) => m._id.toString() === invitedUser._id.toString()
+            );
+            if (isOwner || isMember) {
+              emails.push(invitedUser.email);
+            }
+          });
+          return emails;
+        }, []);
+
+        if (usersWithGroupEmails.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: `Pengguna berikut sudah memiliki grup aktif: ${[
+              ...new Set(usersWithGroupEmails),
+            ].join(
+              ", "
+            )}. Satu pengguna hanya bisa memiliki satu grup.`,
+            data: null,
+          });
         }
       }
-      // If members provided directly (old approach)
+      // Jika pakai members langsung (by userId)
       else if (members.length > 0) {
         const memberUsers = await User.find({ _id: { $in: members } });
         validMembers = memberUsers.map((user) => user._id);
@@ -113,7 +170,6 @@ class GroupController {
       console.log("👥 Valid members to add:", validMembers);
 
       // Jangan sampai melebihi maxMembers (owner + invited members)
-      // Owner akan ditambahkan otomatis oleh pre-save middleware
       const totalMembers = validMembers.length + 1; // +1 untuk owner
       if (totalMembers > maxMembersInt) {
         return res.status(400).json({
@@ -128,7 +184,7 @@ class GroupController {
         name,
         description,
         owner: userId,
-        members: validMembers, // Owner will be added automatically by pre-save middleware
+        members: validMembers,
         maxMembers: maxMembersInt,
       });
 
@@ -175,7 +231,6 @@ class GroupController {
         });
       }
 
-      // Find group where user is owner or member
       const group = await Group.findOne({
         $and: [
           { isActive: true },
@@ -263,14 +318,13 @@ class GroupController {
   }
 
   /**
-   * Get all groups (for admin or browse)
+   * Get all groups
    * GET /api/groups
    */
   async getAllGroups(req, res) {
     try {
       const { page = 1, limit = 10, search } = req.query;
 
-      // Build query - isActive can be true or undefined (for backward compatibility)
       let query = {
         $or: [{ isActive: true }, { isActive: { $exists: false } }],
       };
@@ -343,7 +397,6 @@ class GroupController {
         });
       }
 
-      // Cek owner manual
       if (group.owner.toString() !== userId.toString()) {
         return res.status(403).json({
           success: false,
@@ -352,7 +405,6 @@ class GroupController {
         });
       }
 
-      // Update fields
       if (name) group.name = name;
       if (description !== undefined) group.description = description;
 
@@ -391,10 +443,10 @@ class GroupController {
   }
 
   /**
-   * Get available users that can be invited to the group (not already members)
+   * Get available users that can be invited to the group
    * GET /api/groups/:groupId/available-users
    */
-  async getAvailableUsers(req, res, next) {
+  async getAvailableUsers(req, res) {
     try {
       const { groupId } = req.params;
 
@@ -407,20 +459,48 @@ class GroupController {
         });
       }
 
-      // Get all users except those already in the group and the owner
-      const memberIds = group.members.map((member) => member._id.toString());
-      // owner may be populated (object) or just ObjectId - handle both
+      // IDs member di grup ini
+      const memberIds = group.members.map((member) =>
+        member._id.toString()
+      );
+
+      // owner bisa berupa object atau ObjectId
       const ownerId =
         group.owner &&
-        (group.owner._id ? group.owner._id.toString() : group.owner.toString());
+        (group.owner._id
+          ? group.owner._id.toString()
+          : group.owner.toString());
 
-      const exclusionIds = memberIds.includes(ownerId)
+      const currentGroupExclusionIds = memberIds.includes(ownerId)
         ? memberIds
         : [...memberIds, ownerId];
 
+      // Cari semua user yang sudah punya grup aktif lain
+      const usersWithGroups = await Group.find({
+        isActive: true,
+        _id: { $ne: groupId },
+      }).select("owner members");
+
+      const usersWithGroupIds = new Set();
+      usersWithGroups.forEach((g) => {
+        if (g.owner) {
+          usersWithGroupIds.add(g.owner.toString());
+        }
+        if (g.members && Array.isArray(g.members)) {
+          g.members.forEach((memberId) => {
+            usersWithGroupIds.add(memberId.toString());
+          });
+        }
+      });
+
+      const allExclusionIds = [
+        ...currentGroupExclusionIds,
+        ...Array.from(usersWithGroupIds),
+      ];
+
       const availableUsers = await User.find({
         _id: {
-          $nin: [...memberIds, ownerId],
+          $nin: allExclusionIds,
         },
       }).select("_id name email role");
 
@@ -474,7 +554,7 @@ class GroupController {
         });
       }
 
-      // Cek apakah grup sudah mencapai batas maksimal anggota
+      // Cek batas maksimal anggota
       const effectiveMaxMembers = group.maxMembers || 5;
       if (group.members.length >= effectiveMaxMembers) {
         return res.status(400).json({
@@ -493,7 +573,7 @@ class GroupController {
         });
       }
 
-      // Cek apakah sudah jadi member
+      // Sudah jadi member?
       const alreadyMember = group.members.some(
         (m) => m.toString() === userId.toString()
       );
@@ -506,10 +586,14 @@ class GroupController {
         });
       }
 
-      // ✅ CEK APAKAH USER SUDAH PUNYA GRUP AKTIF SEBAGAI OWNER
+      // Cek apakah user sudah punya grup aktif (sebagai owner ATAU member)
       const userExistingGroup = await Group.findOne({
-        owner: userId,
-        isActive: true,
+        $and: [
+          { isActive: true },
+          {
+            $or: [{ owner: userId }, { members: userId }],
+          },
+        ],
       });
 
       if (userExistingGroup) {
@@ -521,11 +605,10 @@ class GroupController {
         });
       }
 
-      // ➕ Tambahkan user ke members
+      // Tambahkan user ke members
       group.members.push(userId);
       await group.save();
 
-      // Populate dan kirim balik
       await group.populate([
         { path: "members", select: "name email role" },
         { path: "owner", select: "name email role" },
@@ -597,7 +680,6 @@ class GroupController {
       );
       await group.save();
 
-      // Populate dan kirim balik
       await group.populate([
         { path: "members", select: "name email role" },
         { path: "owner", select: "name email role" },
@@ -610,6 +692,81 @@ class GroupController {
       });
     } catch (error) {
       console.error("Remove Member Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+        data: null,
+      });
+    }
+  }
+
+  /**
+   * Leave group
+   * POST /api/groups/:groupId/leave
+   */
+  async leaveGroup(req, res) {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user?._id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "User tidak terautentikasi",
+          data: null,
+        });
+      }
+
+      const group = await Group.findById(groupId);
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: "Grup tidak ditemukan",
+          data: null,
+        });
+      }
+
+      const isOwner = group.owner.toString() === userId.toString();
+      const isMember = group.members.some(
+        (m) => m.toString() === userId.toString()
+      );
+
+      if (!isOwner && !isMember) {
+        return res.status(400).json({
+          success: false,
+          message: "User bukan anggota grup ini",
+          data: null,
+        });
+      }
+
+      // Jika owner yang leave → hapus grup
+      if (isOwner) {
+        await Group.findByIdAndDelete(groupId);
+        return res.json({
+          success: true,
+          message:
+            "Grup berhasil dihapus karena owner meninggalkan grup",
+        });
+      }
+
+      // Jika member biasa → remove dari members
+      group.members = group.members.filter(
+        (m) => m.toString() !== userId.toString()
+      );
+      await group.save();
+
+      await group.populate([
+        { path: "members", select: "name email role" },
+        { path: "owner", select: "name email role" },
+      ]);
+
+      return res.json({
+        success: true,
+        message: "Berhasil keluar dari grup",
+        data: group,
+      });
+    } catch (error) {
+      console.error("Leave Group Error:", error);
       return res.status(500).json({
         success: false,
         message: error.message,
@@ -644,21 +801,20 @@ class GroupController {
         });
       }
 
-      // Hanya owner yang boleh delete
       if (group.owner.toString() !== userId.toString()) {
         return res.status(403).json({
           success: false,
-          message: "Hanya group owner yang bisa menghapus grup",
+          message: "Hanya owner yang bisa menghapus grup",
           data: null,
         });
       }
 
-      // Delete grup
       await Group.findByIdAndDelete(groupId);
 
       return res.json({
         success: true,
         message: "Grup berhasil dihapus",
+        data: null,
       });
     } catch (error) {
       console.error("Delete Group Error:", error);
@@ -671,4 +827,5 @@ class GroupController {
   }
 }
 
-module.exports = GroupController;
+// Export instance, bukan class
+module.exports = new GroupController();
