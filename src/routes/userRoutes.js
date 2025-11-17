@@ -16,6 +16,9 @@ router.get('/', authMiddleware, userController.getUsers);
 // Export users route
 router.get('/export', authMiddleware, userController.exportUsers);
 
+// Validate user role (Admin only)
+router.patch('/:userId/validate-role', authMiddleware, userController.validateUserRole);
+
 // Admin: Update and delete user
 router.put('/:userId', authMiddleware, userController.updateUser);
 router.delete('/:userId', authMiddleware, userController.deleteUser);

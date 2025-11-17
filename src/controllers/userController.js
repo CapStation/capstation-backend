@@ -12,7 +12,7 @@ exports.getUsers = async (req, res, next) => {
     }
     
     const users = await User.find(filter)
-      .select('name email role createdAt updatedAt')
+      .select('name email role isVerified roleApproved createdAt updatedAt')
       .sort({ name: 1 });
     
     res.json({
@@ -467,6 +467,49 @@ exports.exportUsers = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Gagal mengekspor pengguna',
+      error: error.message,
+      data: null
+    });
+  }
+};
+
+// Validate user role
+exports.validateUserRole = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Find and update user
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        roleApproved: true,
+        updatedAt: new Date()
+      },
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    ).select('-passwordHash -resetToken -resetTokenExpires -verifyToken -verifyTokenExpires');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pengguna tidak ditemukan',
+        data: null
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Role ${user.role} untuk ${user.name} berhasil divalidasi`,
+      data: user
+    });
+
+  } catch (error) {
+    console.error('Validate User Role Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Gagal memvalidasi role pengguna',
       error: error.message,
       data: null
     });

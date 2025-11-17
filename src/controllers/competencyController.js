@@ -20,7 +20,7 @@ exports.getAllCompetencies = async (req, res, next) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const competencies = await Competency.find(filter)
-      .select('name category description')
+      .select('name category description isActive createdAt')
       .sort({ category: 1, name: 1 })
       .skip(skip)
       .limit(parseInt(limit));
