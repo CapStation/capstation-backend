@@ -1157,6 +1157,81 @@ class DocumentController {
       });
     }
   }
+
+  /**
+   * Export all documents to CSV
+   * GET /api/documents/export
+   */
+  async exportDocuments(req, res) {
+    try {
+      // Get all documents without pagination
+      const documents = await this.documentService.getAllDocuments({
+        page: 1,
+        limit: 999999, // Get all documents
+        sortBy: 'createdAt',
+        sortOrder: 'desc'
+      });
+
+      // Format data for CSV
+      const csvData = documents.documents.map(doc => ({
+        'Nama File': doc.originalName || '',
+        'Tipe Dokumen': doc.documentType || '',
+        'Kategori Capstone': doc.capstoneCategory || '',
+        'Judul Proyek': doc.project?.title || '',
+        'Tema Proyek': doc.project?.tema || '',
+        'Status Proyek': doc.project?.status || '',
+        'Tahun Akademik': doc.project?.academicYear || '',
+        'Diupload Oleh': doc.uploadedBy?.name || doc.uploadedBy?.username || '',
+        'Email': doc.uploadedBy?.email || '',
+        'Ukuran File (KB)': doc.fileSize ? Math.round(doc.fileSize / 1024) : 0,
+        'Tanggal Upload': doc.createdAt ? new Date(doc.createdAt).toLocaleDateString('id-ID') : '',
+        'Terakhir Diperbarui': doc.updatedAt ? new Date(doc.updatedAt).toLocaleDateString('id-ID') : ''
+      }));
+
+      // Convert to CSV format
+      if (csvData.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tidak ada dokumen untuk diekspor',
+          data: null
+        });
+      }
+
+      const headers = Object.keys(csvData[0]);
+      const csvRows = [
+        headers.join(','),
+        ...csvData.map(row => 
+          headers.map(header => {
+            const value = row[header] || '';
+            // Escape quotes and wrap in quotes if contains comma or quotes
+            const escaped = String(value).replace(/"/g, '""');
+            return escaped.includes(',') || escaped.includes('"') || escaped.includes('\n') 
+              ? `"${escaped}"` 
+              : escaped;
+          }).join(',')
+        )
+      ];
+
+      const csv = csvRows.join('\n');
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename=dokumen_capstation_${new Date().toISOString().split('T')[0]}.csv`);
+      
+      // Add BOM for Excel UTF-8 compatibility
+      res.write('\uFEFF');
+      res.end(csv);
+
+    } catch (error) {
+      console.error('Export Documents Error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Gagal mengekspor dokumen',
+        error: error.message,
+        data: null
+      });
+    }
+  }
 }
 
 module.exports = DocumentController;

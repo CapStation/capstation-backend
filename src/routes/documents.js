@@ -12,6 +12,9 @@ const documentController = new DocumentController();
 router.get('/stats', documentController.getDocumentStatistics.bind(documentController));
 router.get('/categories', documentController.getDocumentCategories.bind(documentController));
 
+// Export route (auth required, admin only would be better but for now just auth)
+router.get('/export', authMiddleware, documentController.exportDocuments.bind(documentController));
+
 // Protected routes for reading documents (auth required)
 router.get('/tema/:tema', authMiddleware, documentController.getDocumentsByTema.bind(documentController));
 router.get('/tema/:tema/stats', authMiddleware, documentController.getDocumentStatsByTema.bind(documentController));

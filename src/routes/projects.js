@@ -13,6 +13,9 @@ router.get('/categories', projectController.getCategories);
 router.get('/statistics', projectController.getProjectStatistics);
 router.post('/search', projectController.advancedSearch);
 
+// Export route (auth required)
+router.get('/export', authMiddleware, projectController.exportProjects);
+
 // Theme-based filtering routes projects (public)
 router.get('/tema/:tema', projectController.getProjectsByTema);
 router.get('/available', projectController.getAvailableProjects);
