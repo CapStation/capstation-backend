@@ -675,6 +675,9 @@ class ProjectController {
     this.getAvailableTemas = this.getAvailableTemas.bind(this);
     this.getProjectsByTema = this.getProjectsByTema.bind(this);
     this.getProjectDocuments = this.getProjectDocuments.bind(this);
+    this.getProjectCompetencies = this.getProjectCompetencies.bind(this);
+    this.addProjectCompetency = this.addProjectCompetency.bind(this);
+    this.removeProjectCompetency = this.removeProjectCompetency.bind(this);
     
     // export
     this.exportProjects = this.exportProjects.bind(this);
@@ -783,6 +786,80 @@ class ProjectController {
         error: error.message,
         data: null
       });
+    }
+  }
+
+  /**
+   * Get project competencies
+   * GET /api/projects/:id/competencies
+   */
+  async getProjectCompetencies(req, res) {
+    try {
+      const projectId = req.params.id;
+      const competencies = await this.projectService.getProjectCompetencies(projectId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Kompetensi project berhasil diambil',
+        data: competencies
+      });
+    } catch (error) {
+      console.error('Get Project Competencies Error:', error);
+      res.status(400).json({
+        success: false,
+        message: error.message,
+        data: null
+      });
+    }
+  }
+
+  /**
+   * Add competency to project
+   * POST /api/projects/:id/competencies
+   */
+  async addProjectCompetency(req, res) {
+    try {
+      const projectId = req.params.id;
+      const { competencyId } = req.body;
+      const userId = req.user?._id;
+
+      if (!competencyId) {
+        return res.status(400).json({ success: false, message: 'competencyId is required', data: null });
+      }
+
+      const competencies = await this.projectService.addProjectCompetency(projectId, competencyId, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Kompetensi berhasil ditambahkan ke project',
+        data: competencies
+      });
+    } catch (error) {
+      console.error('Add Project Competency Error:', error);
+      res.status(400).json({ success: false, message: error.message, data: null });
+    }
+  }
+
+  /**
+   * Remove competency from project
+   * DELETE /api/projects/:id/competencies/:index
+   */
+  async removeProjectCompetency(req, res) {
+    try {
+      const projectId = req.params.id;
+      const index = req.params.index;
+      const userId = req.user?._id;
+
+      const competencies = await this.projectService.removeProjectCompetency(projectId, index, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Kompetensi berhasil dihapus dari project',
+        data: competencies
+      });
+    } catch (error) {
+      console.error('Remove Project Competency Error:', error);
+      res.status(400).json({ success: false, message: error.message, data: null });
     }
   }
 }
