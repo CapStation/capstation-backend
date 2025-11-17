@@ -25,10 +25,36 @@ app.use(
   })
 );
 
-// CORS configuration
+// CORS configuration - Support multiple origins
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:3000",
+  "http://localhost:3000", // Local development
+  "https://capstation-frontend.vercel.app", // Production
+  "https://capstation-frontend-git-main-capstation.vercel.app", // Vercel Git preview
+  /https:\/\/capstation-frontend.*\.vercel\.app$/, // All Vercel preview deployments
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, Postman, curl)
+      if (!origin) return callback(null, true);
+
+      // Check if origin is in allowed list
+      const isAllowed = allowedOrigins.some((allowedOrigin) => {
+        if (allowedOrigin instanceof RegExp) {
+          return allowedOrigin.test(origin);
+        }
+        return allowedOrigin === origin;
+      });
+
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS blocked origin: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "x-user-id", "x-role"],
     exposedHeaders: ["Content-Disposition", "Content-Type"],
