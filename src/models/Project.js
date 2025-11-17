@@ -47,6 +47,11 @@ const projectSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'Owner project harus ada']
   },
+  parentProject: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Project',
+    default: null
+  },
   group: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group',

@@ -117,7 +117,7 @@ class ProjectController {
   }
 
   /**
-   * Get my projects (projects owned by the authenticated user)
+   * Get my projects (projects where user is owner OR member)
    * GET /api/projects/my-projects
    */
   async getMyProjects(req, res) {
@@ -126,7 +126,7 @@ class ProjectController {
       console.log('🔐 User from auth middleware:', req.user);
       
       // Get user ID from auth middleware
-      const userId = req.user?._id;
+      const userId = req.user?._id || req.user?.id;
       
       if (!userId) {
         return res.status(401).json({
@@ -136,35 +136,29 @@ class ProjectController {
         });
       }
 
-      console.log('🔍 Getting projects for user ID:', userId);
+      console.log('🔍 Getting projects for user ID (owner OR member):', userId);
 
-      // Query filters
-      const filters = {
-        owner: userId, // Filter by owner (user ID)
-        tema: req.query.tema,
-        status: req.query.status,
-        academicYear: req.query.academicYear,
-        search: req.query.search,
-        page: parseInt(req.query.page) || 1,
-        limit: parseInt(req.query.limit) || 10
-      };
+      // Query untuk mencari project dimana user adalah owner ATAU member
+      const projects = await this.projectService.model
+        .find({
+          $or: [
+            { owner: userId },      // User adalah owner
+            { members: userId }     // User adalah member
+          ]
+        })
+        .populate('owner', 'fullName name username email')
+        .populate('supervisor', 'fullName name username email')
+        .populate('group')
+        .populate('members', 'fullName name username email')
+        .limit(100)
+        .sort({ updatedAt: -1 });
 
-      const result = await this.projectService.getProjectsByFilter(filters);
-
-      console.log('📊 My projects result:', {
-        totalProjects: result.projects.length,
-        pagination: result.pagination
-      });
+      console.log('📊 Projects found for user (owner OR member):', projects.length);
 
       res.status(200).json({
         success: true,
         message: 'Project Anda berhasil diambil',
-        data: result.projects,
-        pagination: result.pagination,
-        filters: {
-          applied: filters,
-          available_themes: getValidThemes()
-        }
+        data: projects
       });
     } catch (error) {
       console.error('❌ Error getMyProjects:', error);
@@ -413,34 +407,6 @@ class ProjectController {
       });
     } catch (error) {
       res.status(400).json({
-        success: false,
-        message: error.message,
-        data: null
-      });
-    }
-  }
-
-  /**
-   * Get projects by current user (as owner)
-   * GET /api/projects/my-projects
-   */
-  async getMyProjects(req, res) {
-    try {
-      const userId = req.user.id;
-      const filters = {
-        status: req.query.status,
-        category: req.query.category
-      };
-
-      const projects = await this.projectService.getProjectsByOwner(userId, filters);
-
-      res.status(200).json({
-        success: true,
-        message: 'Project Anda berhasil diambil',
-        data: projects
-      });
-    } catch (error) {
-      res.status(500).json({
         success: false,
         message: error.message,
         data: null
@@ -733,41 +699,6 @@ class ProjectController {
       res.status(500).json({
         success: false,
         message: 'Gagal mengambil tema tersedia',
-        data: null
-      });
-    }
-  }
-
-  /**
-   * Get my projects - projects owned by authenticated user
-   * GET /api/projects/my-projects
-   */
-  async getMyProjects(req, res) {
-    try {
-      console.log('🔍 getMyProjects called');
-      console.log('🔍 User from auth:', req.user);
-      
-      const userId = req.user.id;
-      console.log('🔍 Filtering projects by userId:', userId);
-      
-      const result = await this.projectService.getProjectsByFilter({
-        owner: userId,
-        page: 1,
-        limit: 100
-      });
-
-      console.log('🔍 Projects found for user:', result.projects.length);
-      
-      res.status(200).json({
-        success: true,
-        message: 'Project Anda berhasil diambil',
-        data: result.projects
-      });
-    } catch (error) {
-      console.error('Get My Projects Error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Gagal mengambil project Anda',
         data: null
       });
     }
