@@ -86,6 +86,7 @@ function shape(r, cap, embed) {
   const base = {
     id: String(r._id),
     capstoneId: String(r.capstoneId),
+    newProjectId: r.newProjectId ? String(r.newProjectId) : null,
     groupId: r.group ? String(r.group) : null,
     groupName: r.groupName,
     tahunPengajuan: r.tahunPengajuan,
@@ -123,6 +124,10 @@ function shape(r, cap, embed) {
 // POST /api/requests
 exports.createRequest = async (req, res, next) => {
   try {
+    console.log('=== CREATE REQUEST DEBUG ===');
+    console.log('Body:', req.body);
+    console.log('User:', req.user ? { id: req.user.id, name: req.user.name } : 'No user');
+    
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const { capstoneId, groupName, tahunPengajuan, namaDosenPembimbing } = body;
 
@@ -153,9 +158,31 @@ exports.createRequest = async (req, res, next) => {
       return res.status(400).json({ error: 'groupName tidak boleh kosong' });
     }
 
-    const tahun = Number(tahunPengajuan);
-    if (!Number.isInteger(tahun) || tahun < 2000) {
-      return res.status(400).json({ error: 'tahunPengajuan tidak valid' });
+    // Validasi tahunPengajuan - bisa berupa angka atau format "Semester-Tahun"
+    const tahunPengajuanStr = String(tahunPengajuan).trim();
+    if (!tahunPengajuanStr) {
+      return res.status(400).json({ error: 'tahunPengajuan tidak boleh kosong' });
+    }
+    
+    // Cek apakah format "Semester-Tahun" (e.g., "Gasal-2024") atau hanya angka
+    let tahunValid = false;
+    let tahunForQuery = tahunPengajuanStr;
+    
+    if (/^(Gasal|Genap)-\d{4}$/.test(tahunPengajuanStr)) {
+      // Format baru: "Gasal-2024" atau "Genap-2024"
+      tahunValid = true;
+    } else {
+      // Format lama: angka tahun saja
+      const tahunNum = Number(tahunPengajuanStr);
+      if (Number.isInteger(tahunNum) && tahunNum >= 2000) {
+        tahunValid = true;
+      }
+    }
+    
+    if (!tahunValid) {
+      return res.status(400).json({ 
+        error: 'tahunPengajuan tidak valid. Format yang diterima: "Gasal-2024" atau "2024"' 
+      });
     }
 
     const namaDospem = String(namaDosenPembimbing || '').trim();
@@ -233,7 +260,7 @@ exports.createRequest = async (req, res, next) => {
     const dupe = await Request.findOne({
       capstoneId,
       group: groupId,
-      tahunPengajuan: tahun,
+      tahunPengajuan: tahunForQuery,
       status: { $ne: 'cancelled' }
     }).lean();
 
@@ -243,18 +270,52 @@ exports.createRequest = async (req, res, next) => {
       });
     }
 
+    // 6. OTOMATIS BUAT PROJECT BARU untuk mahasiswa yang request
+    // Project ini dengan status pending dan inactive
+    console.log('Creating new project for group:', groupId);
+    console.log('Group details:', myGroup);
+    
+    const newProject = await Project.create({
+      title: cap.title,
+      description: cap.description || `Melanjutkan capstone: ${cap.title}`,
+      tema: cap.tema,
+      owner: myGroup.owner, // Set owner dari group owner
+      group: groupId,
+      supervisor: cap.supervisor,
+      capstoneStatus: 'pending', // menunggu approval
+      status: 'inactive', // belum bisa dikerjakan
+      parentProject: capstoneId, // referensi ke project asli
+      academicYear: tahunForQuery,
+      competencies: cap.competencies || []
+    });
+    
+    console.log('New project created:', newProject._id);
+
+    // 7. Simpan request dengan referensi ke newProjectId
     const created = await Request.create({
-      capstoneId,
+      capstoneId, // project asli yang di-request
+      newProjectId: newProject._id, // project baru mahasiswa
       group: groupId,
       groupName: namaKelompok,
-      tahunPengajuan: tahun,
+      tahunPengajuan: tahunForQuery,
       namaDosenPembimbing: namaDospem,
       pemohonId: String(req.user.id),
       status: 'pending'
     });
 
-    return res.status(201).json(shape(created.toObject(), cap, false));
+    return res.status(201).json({
+      ...shape(created.toObject(), cap, false),
+      newProjectId: String(newProject._id),
+      newProjectTitle: newProject.title
+    });
   } catch (err) {
+    console.error('=== CREATE REQUEST ERROR ===');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+    if (err.errors) {
+      console.error('Validation errors:', err.errors);
+    }
     next(err);
   }
 };
@@ -430,15 +491,22 @@ exports.decideRequest = async (req, res, next) => {
       return res.status(404).json({ error: 'Request tidak ditemukan' });
     }
 
+    // cap adalah PROJECT ASLI (project kating yang dapat_dilanjutkan)
     const cap = await Project.findById(r.capstoneId);
     if (!cap) {
       return res.status(404).json({ error: 'Project terkait request tidak ditemukan' });
     }
 
-    // cek apakah user ini owner project yang dimaksud
+    // newProject adalah PROJECT BARU mahasiswa yang request
+    const newProject = await Project.findById(r.newProjectId);
+    if (!newProject) {
+      return res.status(404).json({ error: 'Project baru mahasiswa tidak ditemukan' });
+    }
+
+    // cek apakah user ini owner project ASLI yang dimaksud
     if (String(cap.owner) !== String(req.user.id)) {
       return res.status(403).json({
-        error: 'Anda bukan pemilik project ini. Tidak boleh memutuskan request.'
+        error: 'Anda bukan pemilik project asli. Tidak boleh memutuskan request.'
       });
     }
 
@@ -479,13 +547,13 @@ exports.decideRequest = async (req, res, next) => {
     r.history = Array.isArray(r.history) ? r.history : [];
     r.history.push(hist);
 
-    // update project sesuai alur
+    // UPDATE PROJECT BARU MAHASISWA (bukan project asli!)
     if (decision === 'accept') {
-      // Project mahasiswa baru berubah:
+      // Project mahasiswa baru DITERIMA:
       // capstoneStatus = 'accepted', status = 'active'
-      cap.capstoneStatus = 'accepted';
-      cap.status = 'active';
-      await cap.save();
+      newProject.capstoneStatus = 'accepted';
+      newProject.status = 'active';
+      await newProject.save();
 
       // AUTO REJECT BY SYSTEM
       // Semua request lain milik grup yang sama dan masih pending akan di-reject
@@ -499,6 +567,16 @@ exports.decideRequest = async (req, res, next) => {
         'Rejected by System (Kelompok Anda sudah diterima di capstone lain)';
 
       for (const other of otherPending) {
+        // Reject project baru mahasiswa yang lain juga
+        if (other.newProjectId) {
+          const otherNewProject = await Project.findById(other.newProjectId);
+          if (otherNewProject) {
+            otherNewProject.capstoneStatus = 'rejected';
+            otherNewProject.status = 'inactive';
+            await otherNewProject.save();
+          }
+        }
+
         const h = {
           from: other.status,
           to: 'rejected',
@@ -519,11 +597,11 @@ exports.decideRequest = async (req, res, next) => {
         await other.save();
       }
     } else if (decision === 'reject') {
-      // Project mahasiswa baru berubah:
+      // Project mahasiswa baru DITOLAK:
       // capstoneStatus = 'rejected', status = 'inactive'
-      cap.capstoneStatus = 'rejected';
-      cap.status = 'inactive';
-      await cap.save();
+      newProject.capstoneStatus = 'rejected';
+      newProject.status = 'inactive';
+      await newProject.save();
     }
 
     await r.save();
@@ -931,6 +1009,16 @@ exports.cancelRequest = async (req, res, next) => {
     r.history.push(hist);
 
     await r.save();
+
+    // Update project baru mahasiswa juga jika ada
+    if (r.newProjectId) {
+      const newProject = await Project.findById(r.newProjectId);
+      if (newProject) {
+        newProject.capstoneStatus = 'rejected';
+        newProject.status = 'inactive';
+        await newProject.save();
+      }
+    }
 
     return res.json({
       success: true,
