@@ -22,5 +22,6 @@ router.delete('/:groupId', groupController.deleteGroup.bind(groupController));
 router.get('/:groupId/available-users', groupController.getAvailableUsers.bind(groupController));
 router.post('/:groupId/invite', groupController.inviteMember.bind(groupController));
 router.post('/:groupId/remove-member', groupController.removeMember.bind(groupController));
+router.post('/:groupId/leave', groupController.leaveGroup.bind(groupController));
 
 module.exports = router;
