@@ -3,7 +3,7 @@ const GroupController = require('../controllers/groupController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 
 const router = express.Router();
-const groupController = new GroupController();
+const groupController = require("../controllers/groupController");
 
 // Public routes
 router.get('/', groupController.getAllGroups.bind(groupController));

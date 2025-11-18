@@ -209,33 +209,3 @@ exports.resetPassword = async (req, res, next) => {
     next(err);
   }
 };
-
-exports.verifyEmail = async (req, res) => {
-  try {
-    const { token, email } = req.query;
-
-    if (!token || !email) {
-      return res.status(400).json({ message: "Token atau email tidak ada" });
-    }
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findOne({ _id: decoded.userId, email });
-
-    if (!user) {
-      return res.status(404).json({ message: "User tidak ditemukan" });
-    }
-
-    if (user.isVerified) {
-      return res.send("Email kamu sudah terverifikasi!");
-    }
-
-    user.isVerified = true;
-    await user.save();
-
-    return res.send("Email berhasil diverifikasi. Sekarang kamu bisa login!");
-  } catch (err) {
-    console.error(err);
-    return res
-      .status(400)
-      .json({ message: "Token tidak valid atau sudah kadaluarsa" });
-  }
-};
