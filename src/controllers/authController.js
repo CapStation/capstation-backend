@@ -125,7 +125,14 @@ exports.login = async (req, res, next) => {
     const token = generateToken(user);
     return res.json({
       accessToken: token,
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isVerified: user.isVerified,
+        roleApproved: user.roleApproved,
+      },
     });
   } catch (err) {
     next(err);
