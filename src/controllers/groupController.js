@@ -45,7 +45,7 @@ class GroupController {
         });
       }
 
-      // Check apakah user sudah punya grup aktif sebagai owner
+      // Check apakah user sudah punya grup sebagai owner
       const existingGroup = await Group.findOne({
         owner: userId,
         isActive: true,
@@ -55,6 +55,20 @@ class GroupController {
           success: false,
           message:
             "User sudah memiliki grup aktif. Satu user hanya bisa memiliki satu grup.",
+          data: null,
+        });
+      }
+
+      // Check apakah user sudah jadi member grup lain
+      const memberGroup = await Group.findOne({
+        members: userId,
+        isActive: true,
+      });
+      if (memberGroup) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "User sudah menjadi member grup lain. Satu user hanya bisa bergabung dengan satu grup.",
           data: null,
         });
       }
@@ -382,7 +396,7 @@ class GroupController {
   async updateGroup(req, res) {
     try {
       const { groupId } = req.params;
-      const { name, description, members } = req.body;
+      const { name, description, members, isActive, visibility } = req.body;
       const userId = req.user?._id;
 
       if (!userId) {
@@ -412,6 +426,8 @@ class GroupController {
 
       if (name) group.name = name;
       if (description !== undefined) group.description = description;
+      if (isActive !== undefined) group.isActive = isActive;
+      if (visibility) group.visibility = visibility;
 
       if (members) {
         const memberUsers = await User.find({ _id: { $in: members } });
@@ -480,7 +496,25 @@ class GroupController {
         ? memberIds
         : [...memberIds, ownerId];
 
-      // ✅ FILTER: Hanya mahasiswa yang terverifikasi dan roleApproved
+      // ✅ Get all active groups to exclude users who are already owners or members
+      const activeGroups = await Group.find({ isActive: true });
+      const usersInGroups = new Set();
+      
+      activeGroups.forEach(g => {
+        // Add owner
+        const gOwnerId = g.owner && (g.owner._id ? g.owner._id.toString() : g.owner.toString());
+        if (gOwnerId) usersInGroups.add(gOwnerId);
+        
+        // Add all members
+        if (g.members && Array.isArray(g.members)) {
+          g.members.forEach(m => {
+            const mId = m._id ? m._id.toString() : m.toString();
+            usersInGroups.add(mId);
+          });
+        }
+      });
+
+      // ✅ FILTER: Hanya mahasiswa yang terverifikasi, roleApproved, dan belum punya grup
       const availableUsers = await User.find({
         _id: {
           $nin: allExclusionIds,
@@ -490,9 +524,14 @@ class GroupController {
         roleApproved: true, // Harus roleApproved
       }).select("_id name email role isVerified roleApproved");
 
+      // Filter lagi untuk exclude yang sudah punya grup
+      const filteredUsers = availableUsers.filter(user => 
+        !usersInGroups.has(user._id.toString())
+      );
+
       res.json({
         success: true,
-        data: availableUsers,
+        data: filteredUsers,
       });
     } catch (error) {
       console.error("Get Available Users Error:", error);
