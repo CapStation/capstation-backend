@@ -517,7 +517,7 @@ class GroupController {
       // ✅ FILTER: Hanya mahasiswa yang terverifikasi, roleApproved, dan belum punya grup
       const availableUsers = await User.find({
         _id: {
-          $nin: allExclusionIds,
+          $nin: Array.from(usersInGroups),
         },
         role: "mahasiswa", // Hanya mahasiswa
         isVerified: true, // Harus terverifikasi
