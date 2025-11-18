@@ -3,69 +3,112 @@ const mongoose = require('mongoose');
 const Competency = require('../models/competencyModel');
 const User = require('../models/userModel');
 
+// ===========================
+// FIXED COMPETENCY SEEDER
+// ===========================
+
 const initialCompetencies = [
-  // Programming Languages
-  { name: 'JavaScript', category: 'Programming Languages', description: 'Bahasa pemrograman untuk web development' },
-  { name: 'Python', category: 'Programming Languages', description: 'Bahasa pemrograman serbaguna untuk berbagai aplikasi' },
-  { name: 'Java', category: 'Programming Languages', description: 'Bahasa pemrograman berorientasi objek' },
-  { name: 'TypeScript', category: 'Programming Languages', description: 'JavaScript dengan static typing' },
-  { name: 'PHP', category: 'Programming Languages', description: 'Server-side scripting language' },
-  { name: 'C++', category: 'Programming Languages', description: 'Bahasa pemrograman tingkat menengah' },
-  { name: 'Go', category: 'Programming Languages', description: 'Bahasa pemrograman modern dari Google' },
+  // =========================
+  // 1. Software Development
+  // =========================
+  { category: 'Software Development', name: 'Backend Development', description: 'Pengembangan sisi server untuk aplikasi' },
+  { category: 'Software Development', name: 'Frontend Development', description: 'Pengembangan antarmuka pengguna' },
+  { category: 'Software Development', name: 'API Engineering', description: 'Perancangan dan implementasi REST/GraphQL API' },
+  { category: 'Software Development', name: 'Software Architecture', description: 'Perancangan struktur aplikasi' },
 
-  // Web Development
-  { name: 'React.js', category: 'Web Development', description: 'JavaScript library untuk membuat UI' },
-  { name: 'Vue.js', category: 'Web Development', description: 'Progressive JavaScript framework' },
-  { name: 'Angular', category: 'Web Development', description: 'TypeScript-based web application framework' },
-  { name: 'Node.js', category: 'Web Development', description: 'JavaScript runtime untuk server-side' },
-  { name: 'Express.js', category: 'Web Development', description: 'Web framework untuk Node.js' },
-  { name: 'Next.js', category: 'Web Development', description: 'React framework dengan SSR' },
-  { name: 'Laravel', category: 'Web Development', description: 'PHP web application framework' },
-  { name: 'Django', category: 'Web Development', description: 'Python web framework' },
+  // =========================
+  // 2. Web & Mobile Application
+  // =========================
+  { category: 'Web & Mobile Application', name: 'Fullstack Web Development', description: 'Pengembangan web end-to-end' },
+  { category: 'Web & Mobile Application', name: 'SSR Web App', description: 'Server-side rendering web app' },
+  { category: 'Web & Mobile Application', name: 'Mobile App Development', description: 'Pengembangan aplikasi mobile multiplatform' },
 
-  // Mobile Development
-  { name: 'React Native', category: 'Mobile Development', description: 'Framework untuk mobile app dengan React' },
-  { name: 'Flutter', category: 'Mobile Development', description: 'Google UI toolkit untuk mobile, web, dan desktop' },
-  { name: 'Swift', category: 'Mobile Development', description: 'Bahasa pemrograman untuk iOS development' },
-  { name: 'Kotlin', category: 'Mobile Development', description: 'Bahasa modern untuk Android' },
-  { name: 'Ionic', category: 'Mobile Development', description: 'Cross-platform mobile app development' },
+  // =========================
+  // 3. Embedded Systems
+  // =========================
+  { category: 'Embedded Systems', name: 'Microcontroller Programming', description: 'Pemrograman MCU seperti Arduino/STM32' },
+  { category: 'Embedded Systems', name: 'Firmware Development', description: 'Pengembangan firmware perangkat keras' },
 
-  // Database
-  { name: 'MySQL', category: 'Database', description: 'Relational database management system' },
-  { name: 'PostgreSQL', category: 'Database', description: 'Advanced open source relational database' },
-  { name: 'MongoDB', category: 'Database', description: 'NoSQL document database' },
-  { name: 'Redis', category: 'Database', description: 'In-memory data structure store' },
+  // =========================
+  // 4. IoT
+  // =========================
+  { category: 'IoT (Internet of Things)', name: 'Sensor & Actuator Integration', description: 'Integrasi sensor dalam sistem IoT' },
+  { category: 'IoT (Internet of Things)', name: 'MQTT Communication', description: 'Protokol lightweight untuk IoT' },
+  { category: 'IoT (Internet of Things)', name: 'IoT Cloud Integration', description: 'Integrasi IoT dengan platform cloud' },
 
-  // Data Science
-  { name: 'Machine Learning', category: 'Data Science', description: 'Algoritma pembelajaran mesin' },
-  { name: 'Data Analytics', category: 'Data Science', description: 'Analisis dan interpretasi data' },
-  { name: 'TensorFlow', category: 'Data Science', description: 'Machine learning framework' },
-  { name: 'Pandas', category: 'Data Science', description: 'Python library untuk manipulasi data' },
-  { name: 'Tableau', category: 'Data Science', description: 'Data visualization platform' },
+  // =========================
+  // 5. Robotics & Automation
+  // =========================
+  { category: 'Robotics & Automation', name: 'Robot Motion Control', description: 'Pengendalian motor dan aktuator robot' },
+  { category: 'Robotics & Automation', name: 'Path Planning', description: 'Perencanaan jalur robot otonom' },
 
-  // UI/UX
-  { name: 'UI Design', category: 'UI/UX Design', description: 'User Interface Design' },
-  { name: 'UX Research', category: 'UI/UX Design', description: 'User Experience Research' },
-  { name: 'Figma', category: 'UI/UX Design', description: 'Collaborative interface design tool' },
-  { name: 'Adobe XD', category: 'UI/UX Design', description: 'Vector-based UX design tool' },
-  { name: 'Prototyping', category: 'UI/UX Design', description: 'Creating interactive prototypes' },
+  // =========================
+  // 6. Signal Processing
+  // =========================
+  { category: 'Signal Processing', name: 'Digital Signal Processing', description: 'Pemrosesan sinyal digital' },
 
-  // DevOps
-  { name: 'Docker', category: 'DevOps', description: 'Containerization platform' },
-  { name: 'Kubernetes', category: 'DevOps', description: 'Container orchestration system' },
-  { name: 'CI/CD', category: 'DevOps', description: 'Continuous Integration/Continuous Deployment' },
-  { name: 'Jenkins', category: 'DevOps', description: 'Automation server for CI/CD' },
+  // =========================
+  // 7. Computer Vision
+  // =========================
+  { category: 'Computer Vision', name: 'Object Detection', description: 'Deteksi objek menggunakan citra' },
+  { category: 'Computer Vision', name: 'Image Classification', description: 'Klasifikasi citra otomatis' },
 
-  // Cloud
-  { name: 'AWS', category: 'Cloud Computing', description: 'Amazon Web Services cloud platform' },
-  { name: 'Google Cloud', category: 'Cloud Computing', description: 'Google Cloud Platform services' },
-  { name: 'Microsoft Azure', category: 'Cloud Computing', description: 'Microsoft cloud computing platform' },
+  // =========================
+  // 8. Machine Learning / AI
+  // =========================
+  { category: 'Machine Learning / AI', name: 'Machine Learning Model', description: 'Pengembangan model ML' },
+  { category: 'Machine Learning / AI', name: 'Deep Learning', description: 'Model neural network' },
+  { category: 'Machine Learning / AI', name: 'Predictive Analytics', description: 'Analisis prediktif berbasis data' },
 
-  // Soft Skills
-  { name: 'Team Leadership', category: 'Soft Skills', description: 'Kemampuan memimpin tim' },
-  { name: 'Communication', category: 'Soft Skills', description: 'Kemampuan komunikasi yang baik' },
-  { name: 'Problem Solving', category: 'Soft Skills', description: 'Kemampuan memecahkan masalah' },
-  { name: 'Critical Thinking', category: 'Soft Skills', description: 'Kemampuan berpikir kritis' },
+  // =========================
+  // 9. Biomedical Devices
+  // =========================
+  { category: 'Biomedical Devices', name: 'Biomedical Sensor Integration', description: 'Integrasi sensor fisiologis' },
+  { category: 'Biomedical Devices', name: 'Medical Device Prototyping', description: 'Prototyping alat kesehatan' },
+
+  // =========================
+  // 10. Health Informatics
+  // =========================
+  { category: 'Health Informatics', name: 'Medical Data Processing', description: 'Pengolahan dan analisis data medis' },
+  { category: 'Health Informatics', name: 'Electronic Health Record System', description: 'Pembangunan sistem rekam medis elektronik' },
+
+  // =========================
+  // 11. Networking & Security
+  // =========================
+  { category: 'Networking & Security', name: 'Network Configuration', description: 'Konfigurasi infrastruktur jaringan' },
+  { category: 'Networking & Security', name: 'Cybersecurity Essentials', description: 'Dasar-dasar keamanan siber' },
+
+  // =========================
+  // 12. Cloud & DevOps
+  // =========================
+  { category: 'Cloud & DevOps', name: 'Docker Containerization', description: 'Deployment menggunakan container' },
+  { category: 'Cloud & DevOps', name: 'CI/CD Automation', description: 'Otomasi build dan deployment' },
+
+  // =========================
+  // 13. Data Engineering & Analytics
+  // =========================
+  { category: 'Data Engineering & Analytics', name: 'Data Pipeline Development', description: 'Pengembangan pipeline data' },
+  { category: 'Data Engineering & Analytics', name: 'Data Visualization', description: 'Penyajian data dalam bentuk visual' },
+
+  // =========================
+  // 14. Human-Computer Interaction
+  // =========================
+  { category: 'Human-Computer Interaction', name: 'UI/UX Design', description: 'Desain interaksi dan antarmuka pengguna' },
+
+  // =========================
+  // 15. Control Systems
+  // =========================
+  { category: 'Control Systems', name: 'PID Control', description: 'Pengendalian sistem dinamis' },
+
+  // =========================
+  // 16. Energy & Power Systems
+  // =========================
+  { category: 'Energy & Power Systems', name: 'Renewable Energy Integration', description: 'Integrasi energi terbarukan' },
+
+  // =========================
+  // 17. Research & Simulation
+  // =========================
+  { category: 'Research & Simulation', name: 'MATLAB Simulation', description: 'Simulasi menggunakan MATLAB/Simulink' },
 ];
 
 async function runSeeder() {
@@ -74,37 +117,30 @@ async function runSeeder() {
     await mongoose.connect(process.env.MONGO_URI_ATLAS);
     console.log("Connected to:", mongoose.connection.name);
 
-
     console.log("🔍 Looking for admin user...");
     const adminUser = await User.findOne({ role: 'admin' });
-
-    const adminId = adminUser
-      ? adminUser._id
-      : new mongoose.Types.ObjectId(); // fallback if no admin
+    const adminId = adminUser ? adminUser._id : new mongoose.Types.ObjectId();
 
     console.log("🗑️ Clearing existing competencies...");
     await Competency.deleteMany({});
 
-    console.log("🌱 Seeding new competencies...");
-
-    for (const comp of initialCompetencies) {
-      try {
-        await Competency.create({
-          ...comp,
-          createdBy: adminId
-        });
-        console.log("✅ Added:", comp.name);
-      } catch (err) {
-        if (err.code === 11000) {
-          console.log("⏭️ Skipped duplicate:", comp.name);
-        } else {
-          throw err;
-        }
+    console.log("🌱 Seeding new competencies (insertMany)...");
+    const docs = initialCompetencies.map(c => ({ ...c, createdBy: adminId }));
+    try {
+      // Use ordered:false so insertion continues past duplicates
+      const res = await Competency.insertMany(docs, { ordered: false });
+      console.log(`✅ Inserted ${res.length} competencies`);
+    } catch (err) {
+      // insertMany with ordered:false will throw if some inserts failed (e.g., duplicates)
+      if (err && err.writeErrors) {
+        console.log(`⚠️ Some inserts failed: ${err.writeErrors.length} errors`);
+        err.writeErrors.forEach(e => console.log(` - ${e.errmsg || e.err}`));
+      } else {
+        throw err;
       }
     }
 
     console.log("🎉 Seeding completed!");
-
   } catch (err) {
     console.error("❌ Seeder failed:", err);
   } finally {
@@ -113,7 +149,6 @@ async function runSeeder() {
   }
 }
 
-// Run if executed directly
 if (require.main === module) {
   runSeeder();
 }

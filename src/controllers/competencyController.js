@@ -191,18 +191,23 @@ exports.deleteCompetency = async (req, res, next) => {
 exports.getCompetencyCategories = async (req, res, next) => {
   try {
     const categories = [
-      'Programming Languages',
-      'Web Development', 
-      'Mobile Development',
-      'Data Science',
-      'UI/UX Design',
-      'DevOps',
-      'Database',
-      'Cloud Computing',
-      'Artificial Intelligence',
-      'Cybersecurity',
-      'Project Management',
-      'Soft Skills',
+      'Software Development',
+      'Web & Mobile Application',
+      'Embedded Systems',
+      'IoT (Internet of Things)',
+      'Robotics & Automation',
+      'Signal Processing',
+      'Computer Vision',
+      'Machine Learning / AI',
+      'Biomedical Devices',
+      'Health Informatics',
+      'Networking & Security',
+      'Cloud & DevOps',
+      'Data Engineering & Analytics',
+      'Human-Computer Interaction',
+      'Control Systems',
+      'Energy & Power Systems',
+      'Research & Simulation',
       'Others'
     ];
 
