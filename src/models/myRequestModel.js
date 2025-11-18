@@ -20,11 +20,19 @@ const historySchema = new Schema(
 
 const myRequestSchema = new Schema(
   {
-    // ===== PROJECT YANG DIMINTA =====
+    // ===== PROJECT YANG DIMINTA (PROJECT ASLI) =====
     capstoneId: { 
       type: Schema.Types.ObjectId, 
       ref: 'Project', 
       required: true 
+    },
+
+    // ===== PROJECT BARU MAHASISWA =====
+    // Project yang otomatis dibuat saat request dengan status pending
+    newProjectId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Project',
+      required: false
     },
 
     // ===== GRUP PENGAJU =====
@@ -38,8 +46,9 @@ const myRequestSchema = new Schema(
       type: String, 
       required: true 
     },
+    // Mendukung format lama (Number: 2024) dan format baru (String: "Gasal-2024")
     tahunPengajuan: { 
-      type: Number, 
+      type: Schema.Types.Mixed, 
       required: true 
     },
     namaDosenPembimbing: { 
