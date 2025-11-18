@@ -119,8 +119,22 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ message: "Invalid credentials" });
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ message: "Invalid credentials" });
+
+    // Check email verification
     if (!user.isVerified)
-      return res.status(403).json({ message: "Email not verified" });
+      return res.status(403).json({
+        message:
+          "Email belum diverifikasi. Silakan cek email Anda untuk verifikasi.",
+        code: "EMAIL_NOT_VERIFIED",
+      });
+
+    // Check role approval
+    if (!user.roleApproved)
+      return res.status(403).json({
+        message:
+          "Akun Anda belum divalidasi oleh admin. Mohon tunggu validasi dari admin.",
+        code: "ROLE_NOT_APPROVED",
+      });
 
     const token = generateToken(user);
     return res.json({
