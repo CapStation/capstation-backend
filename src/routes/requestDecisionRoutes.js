@@ -15,6 +15,9 @@ router.get('/requests/my', c.listMyRequests);
 // pemilik memutuskan
 router.patch('/requests/:id/decide', c.decideRequest);
 
+// get single request detail
+router.get('/requests/:id', c.getRequestDetail);
+
 // history satu request
 router.get('/requests/:id/history', c.getRequestHistory);
 

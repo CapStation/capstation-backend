@@ -480,9 +480,10 @@ exports.decideRequest = async (req, res, next) => {
       return res.status(401).json({ error: 'User tidak terdeteksi' });
     }
 
-    if (req.user.role !== 'mahasiswa') {
+    // Izinkan mahasiswa dan dosen memutuskan request
+    if (!['mahasiswa', 'dosen'].includes(req.user.role)) {
       return res.status(403).json({
-        error: 'Hanya mahasiswa pemilik project yang boleh memutuskan request'
+        error: 'Hanya mahasiswa atau dosen pemilik project yang boleh memutuskan request'
       });
     }
 
@@ -490,6 +491,13 @@ exports.decideRequest = async (req, res, next) => {
     if (!r) {
       return res.status(404).json({ error: 'Request tidak ditemukan' });
     }
+
+    console.log('=== REQUEST DEBUG INFO ===');
+    console.log('Request ID:', r._id);
+    console.log('Request group field:', r.group);
+    console.log('Request group type:', typeof r.group);
+    console.log('Request status:', r.status);
+    console.log('==========================');
 
     // cap adalah PROJECT ASLI (project kating yang dapat_dilanjutkan)
     const cap = await Project.findById(r.capstoneId);
@@ -555,22 +563,54 @@ exports.decideRequest = async (req, res, next) => {
       newProject.status = 'active';
       await newProject.save();
 
+      // UPDATE PROJECT ASLI (yang dapat_dilanjutkan) jadi selesai
+      if (cap.status === 'dapat_dilanjutkan') {
+        cap.status = 'selesai';
+        await cap.save();
+      }
+
       // AUTO REJECT BY SYSTEM
-      // Semua request lain milik grup yang sama dan masih pending akan di-reject
+      // Semua request lain ke PROJECT YANG SAMA dan masih pending akan di-reject
+      console.log('=== AUTO REJECT LOGIC ===');
+      console.log('Current request ID:', r._id);
+      console.log('Capstone ID (project yang diajukan):', r.capstoneId);
+      console.log('Group ID:', r.group);
+      
+      // Query untuk debug
+      const allRequests = await Request.find().select('_id capstoneId group status');
+      console.log('All requests in DB:', allRequests.map(req => ({
+        id: req._id,
+        capstoneId: req.capstoneId,
+        group: req.group,
+        status: req.status
+      })));
+      
+      // Reject semua request lain yang mengajukan PROJECT YANG SAMA
       const otherPending = await Request.find({
         _id: { $ne: r._id },
-        group: r.group,
+        capstoneId: r.capstoneId,  // ← PROJECT YANG SAMA
         status: 'pending'
       });
 
+      console.log('Found other pending requests to same project:', otherPending.length);
+      console.log('Other pending IDs:', otherPending.map(o => ({ 
+        id: o._id,
+        capstoneId: o.capstoneId,
+        group: o.group,
+        status: o.status 
+      })));
+
       const systemReason =
-        'Rejected by System (Kelompok Anda sudah diterima di capstone lain)';
+        'Rejected by System';
 
       for (const other of otherPending) {
+        console.log(`Rejecting request ${other._id}...`);
+        
         // Reject project baru mahasiswa yang lain juga
         if (other.newProjectId) {
           const otherNewProject = await Project.findById(other.newProjectId);
           if (otherNewProject) {
+            console.log(`Rejecting project ${otherNewProject._id}`);
             otherNewProject.capstoneStatus = 'rejected';
             otherNewProject.status = 'inactive';
             await otherNewProject.save();
@@ -595,7 +635,10 @@ exports.decideRequest = async (req, res, next) => {
         other.history.push(h);
 
         await other.save();
+        console.log(`Request ${other._id} rejected successfully`);
       }
+      
+      console.log('=== AUTO REJECT COMPLETE ===');
     } else if (decision === 'reject') {
       // Project mahasiswa baru DITOLAK:
       // capstoneStatus = 'rejected', status = 'inactive'
@@ -619,6 +662,84 @@ exports.decideRequest = async (req, res, next) => {
     }
 
     return res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ===========================
+// GET REQUEST DETAIL
+// Mengembalikan detail lengkap satu request beserta capstone dan group info
+// ===========================
+// GET /api/requests/:id
+exports.getRequestDetail = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!isHexObjectId(id)) {
+      return res.status(400).json({ error: 'id request tidak valid' });
+    }
+
+    const r = await Request.findById(id)
+      .populate({
+        path: 'capstoneId',
+        select: 'title tema status capstoneStatus owner parentProject'
+      })
+      .populate({
+        path: 'group',
+        select: 'name owner members',
+        populate: {
+          path: 'members',
+          select: 'name'
+        }
+      })
+      .lean();
+
+    if (!r) {
+      return res.status(404).json({ error: 'Request tidak ditemukan' });
+    }
+
+    // siapkan info capstone
+    const cap = r.capstoneId;
+    const capstone = cap
+      ? {
+          id: String(cap._id),
+          judul: cap.title,
+          tema: cap.tema,
+          status: cap.status,
+          capstoneStatus: cap.capstoneStatus,
+          ownerId: String(cap.owner),
+          parentProject: cap.parentProject ? String(cap.parentProject) : null
+        }
+      : null;
+
+    // siapkan info group + anggota
+    const g = r.group;
+    const group = g
+      ? {
+          id: String(g._id),
+          name: g.name,
+          ownerId: g.owner ? String(g.owner._id || g.owner) : null,
+          members: Array.isArray(g.members)
+            ? g.members.map((m) => ({
+                id: String(m._id || m),
+                name: m.name || null
+              }))
+            : []
+        }
+      : null;
+
+    return res.json({
+      id: String(r._id),
+      capstoneId: String(r.capstoneId?._id || r.capstoneId),
+      groupId: r.group ? String(r.group._id || r.group) : null,
+      status: r.status,
+      decidedByRole: r.decidedByRole || null,
+      decidedByUser: r.decidedByUser || null,
+      decidedAt: r.decidedAt || null,
+      history: Array.isArray(r.history) ? r.history : [],
+      capstone,
+      group
+    });
   } catch (err) {
     next(err);
   }
@@ -869,15 +990,43 @@ exports.listOwnedRequests = async (req, res, next) => {
       return res.status(401).json({ error: 'User tidak terdeteksi' });
     }
 
-    if (req.user.role !== 'mahasiswa') {
+    console.log('=== LIST OWNED REQUESTS ===');
+    console.log('User ID:', req.user.id);
+    console.log('User Role:', req.user.role);
+    console.log('Allowed roles:', ['mahasiswa', 'dosen']);
+
+    // Izinkan mahasiswa dan dosen mengakses inbox mereka
+    if (!['mahasiswa', 'dosen'].includes(req.user.role)) {
+      console.log('❌ Role not allowed!');
       return res.status(403).json({
-        error: 'Hanya mahasiswa pemilik project yang boleh mengakses decision inbox'
+        error: 'Hanya mahasiswa atau dosen pemilik project yang boleh mengakses decision inbox'
       });
     }
 
-    const owned = await Project.find({ owner: req.user.id })
+    console.log('✅ Role allowed, fetching owned projects...');
+    // Untuk mahasiswa, hanya project dengan status 'selesai' atau 'dapat_dilanjutkan'
+    // Untuk dosen, ambil semua project mereka
+    const projectQuery = { owner: req.user.id };
+    if (req.user.role === 'mahasiswa') {
+      projectQuery.status = { $in: ['selesai', 'dapat_dilanjutkan'] };
+      console.log('Mahasiswa filter: status = selesai OR dapat_dilanjutkan');
+    }
+    
+    console.log('Project query:', JSON.stringify(projectQuery));
+    
+    const owned = await Project.find(projectQuery)
       .select('_id title owner tema status capstoneStatus parentProject')
       .lean();
+
+    console.log('Found owned projects:', owned.length);
+    if (owned.length > 0) {
+      console.log('Project details:', owned.map(p => ({ 
+        id: p._id, 
+        title: p.title, 
+        status: p.status,
+        capstoneStatus: p.capstoneStatus 
+      })));
+    }
 
     if (!owned.length) {
       return res.json({ count: 0, data: [] });
@@ -885,11 +1034,38 @@ exports.listOwnedRequests = async (req, res, next) => {
 
     const ownedIds = owned.map((c) => c._id);
     const embed = lower(req.query.embed || req.query.expand) === 'capstone';
+    
+    // Support filter by status (pending, accepted, rejected, cancelled, all)
+    const statusFilter = req.query.status;
+    const requestQuery = {
+      capstoneId: { $in: ownedIds }
+    };
+    
+    // Jika status = 'all', tampilkan semua request
+    if (statusFilter === 'all') {
+      // Tidak ada filter status, tampilkan semua
+    }
+    // Jika ada filter status spesifik, tambahkan ke query
+    else if (statusFilter && ['pending', 'accepted', 'rejected', 'cancelled'].includes(statusFilter)) {
+      requestQuery.status = statusFilter;
+    }
+    // Jika tidak ada filter, default tampilkan pending
+    else {
+      requestQuery.status = 'pending';
+    }
 
-    const reqs = await Request.find({
-      capstoneId: { $in: ownedIds },
-      status: 'pending'
-    }).lean();
+    console.log('Request query:', requestQuery);
+    const reqs = await Request.find(requestQuery).lean();
+    
+    console.log('Found requests for owned projects:', reqs.length);
+    if (reqs.length > 0) {
+      console.log('Request details:', reqs.map(r => ({
+        id: r._id,
+        capstoneId: r.capstoneId,
+        groupId: r.group,
+        status: r.status
+      })));
+    }
 
     const capMap = new Map(owned.map((c) => [String(c._id), c]));
 
