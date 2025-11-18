@@ -6,6 +6,15 @@ const Announcement = require('../models/announcementModel');
 exports.createAnnouncement = async (req, res, next) => {
   try {
     const { title, content, isImportant } = req.body;
+    
+    // Only admin and dosen can create
+    if (req.user.role !== 'admin' && req.user.role !== 'dosen') {
+      return res.status(403).json({
+        success: false,
+        message: 'Hanya admin dan dosen yang bisa membuat pengumuman'
+      });
+    }
+
     const announcement = new Announcement({
       title,
       content,
@@ -108,23 +117,37 @@ exports.getAnnouncementById = async (req, res, next) => {
 exports.updateAnnouncement = async (req, res, next) => {
   try {
     const { title, content, isImportant } = req.body;
-    const announcement = await Announcement.findByIdAndUpdate(
-      req.params.id,
-      { title, content, isImportant: isImportant || false },
-      { new: true, runValidators: true }
-    ).populate('createdBy', 'name role');
+    
+    // Find announcement first
+    const announcement = await Announcement.findById(req.params.id);
     
     if (!announcement) {
       return res.status(404).json({
         success: false,
-        message: 'Announcement not found'
+        message: 'Pengumuman tidak ditemukan'
       });
     }
 
+    // Check authorization: admin can edit all, dosen only their own
+    const isOwner = announcement.createdBy.toString() === req.user._id.toString();
+    if (req.user.role !== 'admin' && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak memiliki izin untuk mengedit pengumuman ini'
+      });
+    }
+
+    // Update announcement
+    const updatedAnnouncement = await Announcement.findByIdAndUpdate(
+      req.params.id,
+      { title, content, isImportant: isImportant || false },
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'name role');
+
     res.json({
       success: true,
-      message: 'Announcement updated',
-      data: announcement
+      message: 'Pengumuman berhasil diperbarui',
+      data: updatedAnnouncement
     });
   } catch (err) {
     next(err);
@@ -134,15 +157,26 @@ exports.updateAnnouncement = async (req, res, next) => {
 // delete announcement
 exports.deleteAnnouncement = async (req, res, next) => {
   try {
-    const announcement = await Announcement.findByIdAndDelete(req.params.id);
+    const announcement = await Announcement.findById(req.params.id);
+    
     if (!announcement) {
       return res.status(404).json({
         success: false,
-        message: 'Announcement not found'
+        message: 'Pengumuman tidak ditemukan'
       });
     }
 
-    res.json({ success: true, message: 'Announcement deleted' });
+    // Check authorization: admin can delete all, dosen only their own
+    const isOwner = announcement.createdBy.toString() === req.user._id.toString();
+    if (req.user.role !== 'admin' && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Anda tidak memiliki izin untuk menghapus pengumuman ini'
+      });
+    }
+
+    await Announcement.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Pengumuman berhasil dihapus' });
   } catch (err) {
     next(err);
   }

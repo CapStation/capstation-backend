@@ -13,7 +13,6 @@ class GroupController {
         name,
         description,
         members = [],
-        maxMembers = 5,
         inviteEmails = [],
       } = req.body;
 
@@ -24,20 +23,6 @@ class GroupController {
         return res.status(400).json({
           success: false,
           message: "inviteEmails harus berupa array",
-          data: null,
-        });
-      }
-
-      // Validasi maxMembers (1–100, integer)
-      const maxMembersInt = parseInt(maxMembers, 10);
-      if (
-        !Number.isInteger(maxMembersInt) ||
-        maxMembersInt < 1 ||
-        maxMembersInt > 100
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "Jumlah maksimal anggota harus antara 1 dan 100",
           data: null,
         });
       }
@@ -90,8 +75,6 @@ class GroupController {
           "✅ Found users for emails:",
           invitedUsers.map((u) => u.email)
         );
-
-        validMembers = invitedUsers.map((user) => user._id);
 
         if (invitedUsers.length !== inviteEmails.length) {
           const foundEmails = invitedUsers.map((u) => u.email.toLowerCase());
@@ -152,6 +135,39 @@ class GroupController {
             data: null,
           });
         }
+
+        // ✅ CEK APAKAH ADA USER YANG SUDAH PUNYA GRUP AKTIF (OWNER ATAU MEMBER)
+        for (const user of invitedUsers) {
+          // Cek apakah user adalah owner grup aktif
+          const userOwnedGroup = await Group.findOne({
+            owner: user._id,
+            isActive: true,
+          });
+
+          if (userOwnedGroup) {
+            return res.status(400).json({
+              success: false,
+              message: `User dengan email ${user.email} sudah memiliki grup aktif sebagai owner`,
+              data: null,
+            });
+          }
+
+          // Cek apakah user adalah member grup aktif
+          const userMemberGroup = await Group.findOne({
+            members: user._id,
+            isActive: true,
+          });
+
+          if (userMemberGroup) {
+            return res.status(400).json({
+              success: false,
+              message: `User dengan email ${user.email} sudah menjadi member grup lain`,
+              data: null,
+            });
+          }
+        }
+
+        validMembers = invitedUsers.map((user) => user._id);
       }
       // Jika pakai members langsung (by userId)
       else if (members.length > 0) {
@@ -169,23 +185,12 @@ class GroupController {
 
       console.log("👥 Valid members to add:", validMembers);
 
-      // Jangan sampai melebihi maxMembers (owner + invited members)
-      const totalMembers = validMembers.length + 1; // +1 untuk owner
-      if (totalMembers > maxMembersInt) {
-        return res.status(400).json({
-          success: false,
-          message: `Jumlah anggota (${totalMembers}) melebihi batas maksimal (${maxMembersInt})`,
-          data: null,
-        });
-      }
-
       // Buat grup baru
       const newGroup = new Group({
         name,
         description,
         owner: userId,
-        members: validMembers,
-        maxMembers: maxMembersInt,
+        members: validMembers, // Owner will be added automatically by pre-save middleware
       });
 
       await newGroup.save();
@@ -475,34 +480,15 @@ class GroupController {
         ? memberIds
         : [...memberIds, ownerId];
 
-      // Cari semua user yang sudah punya grup aktif lain
-      const usersWithGroups = await Group.find({
-        isActive: true,
-        _id: { $ne: groupId },
-      }).select("owner members");
-
-      const usersWithGroupIds = new Set();
-      usersWithGroups.forEach((g) => {
-        if (g.owner) {
-          usersWithGroupIds.add(g.owner.toString());
-        }
-        if (g.members && Array.isArray(g.members)) {
-          g.members.forEach((memberId) => {
-            usersWithGroupIds.add(memberId.toString());
-          });
-        }
-      });
-
-      const allExclusionIds = [
-        ...currentGroupExclusionIds,
-        ...Array.from(usersWithGroupIds),
-      ];
-
+      // ✅ FILTER: Hanya mahasiswa yang terverifikasi dan roleApproved
       const availableUsers = await User.find({
         _id: {
           $nin: allExclusionIds,
         },
-      }).select("_id name email role");
+        role: "mahasiswa", // Hanya mahasiswa
+        isVerified: true, // Harus terverifikasi
+        roleApproved: true, // Harus roleApproved
+      }).select("_id name email role isVerified roleApproved");
 
       res.json({
         success: true,
@@ -554,16 +540,6 @@ class GroupController {
         });
       }
 
-      // Cek batas maksimal anggota
-      const effectiveMaxMembers = group.maxMembers || 5;
-      if (group.members.length >= effectiveMaxMembers) {
-        return res.status(400).json({
-          success: false,
-          message: `Grup sudah mencapai batas maksimal anggota (${effectiveMaxMembers})`,
-          data: null,
-        });
-      }
-
       const user = await User.findById(userId);
       if (!user) {
         return res.status(404).json({
@@ -600,7 +576,22 @@ class GroupController {
         return res.status(400).json({
           success: false,
           message:
-            "User sudah memiliki grup aktif. Satu user hanya bisa memiliki satu grup.",
+            "User sudah memiliki grup aktif sebagai owner. Satu user hanya bisa memiliki satu grup.",
+          data: null,
+        });
+      }
+
+      // ✅ CEK APAKAH USER SUDAH JADI MEMBER GRUP LAIN
+      const userMemberGroup = await Group.findOne({
+        members: userId,
+        isActive: true,
+      });
+
+      if (userMemberGroup) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "User sudah menjadi member grup lain. Satu user hanya bisa bergabung dengan satu grup.",
           data: null,
         });
       }
@@ -647,11 +638,20 @@ class GroupController {
         });
       }
 
-      const group = await Group.findById(groupId);
+      const group = await Group.findById(groupId).populate('projects');
       if (!group) {
         return res.status(404).json({
           success: false,
           message: "Grup tidak ditemukan",
+          data: null,
+        });
+      }
+
+      // Validasi: Cek apakah ada project terhubung
+      if (group.projects && group.projects.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Tidak dapat mengeluarkan anggota karena grup masih memiliki project yang terhubung. Hapus atau selesaikan project terlebih dahulu.",
           data: null,
         });
       }
@@ -818,6 +818,89 @@ class GroupController {
       });
     } catch (error) {
       console.error("Delete Group Error:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message,
+        data: null,
+      });
+    }
+  }
+
+  /**
+   * Leave group
+   * POST /api/groups/:groupId/leave
+   * - If owner leaves: delete entire group
+   * - If member leaves: remove from members array
+   */
+  async leaveGroup(req, res) {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user?._id;
+
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: "User tidak terautentikasi",
+          data: null,
+        });
+      }
+
+      const group = await Group.findById(groupId).populate('projects');
+      if (!group) {
+        return res.status(404).json({
+          success: false,
+          message: "Grup tidak ditemukan",
+          data: null,
+        });
+      }
+
+      // Validasi: Cek apakah ada project terhubung
+      if (group.projects && group.projects.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Tidak dapat keluar dari grup karena masih ada project yang terhubung. Hapus atau selesaikan project terlebih dahulu.",
+          data: null,
+        });
+      }
+
+      // Cek apakah user adalah owner
+      const isOwner = group.owner.toString() === userId.toString();
+
+      if (isOwner) {
+        // Jika owner yang keluar, hapus seluruh grup
+        await Group.findByIdAndDelete(groupId);
+
+        return res.json({
+          success: true,
+          message: "Anda adalah owner, grup telah dihapus dan semua anggota keluar otomatis",
+        });
+      } else {
+        // Jika bukan owner, cek apakah user adalah member
+        const isMember = group.members.some(
+          (m) => m.toString() === userId.toString()
+        );
+
+        if (!isMember) {
+          return res.status(400).json({
+            success: false,
+            message: "Anda bukan anggota grup ini",
+            data: null,
+          });
+        }
+
+        // Hapus user dari members
+        group.members = group.members.filter(
+          (m) => m.toString() !== userId.toString()
+        );
+        await group.save();
+
+        return res.json({
+          success: true,
+          message: "Anda berhasil keluar dari grup",
+        });
+      }
+    } catch (error) {
+      console.error("Leave Group Error:", error);
       return res.status(500).json({
         success: false,
         message: error.message,

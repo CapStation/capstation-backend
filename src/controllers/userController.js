@@ -84,7 +84,7 @@ exports.getUsers = async (req, res, next) => {
     }
 
     const users = await User.find(filter)
-      .select('name email role isVerified roleApproved createdAt updatedAt')
+      .select("name email role isVerified roleApproved createdAt updatedAt")
       .sort({ name: 1 });
 
     res.json({
@@ -481,7 +481,7 @@ exports.searchUsersByEmail = async (req, res, next) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Email parameter wajib diisi',
+        message: "Email parameter wajib diisi",
         data: null,
       });
     }
@@ -493,8 +493,8 @@ exports.searchUsersByEmail = async (req, res, next) => {
     const user = await User.findOne({
       email: normalizedEmail,
     })
-      .collation({ locale: 'en', strength: 2 }) // strength:2 → case-insensitive
-      .select('_id name email role')
+      .collation({ locale: "en", strength: 2 }) // strength:2 → case-insensitive
+      .select("_id name email role")
       .lean();
 
     if (!user) {
@@ -507,7 +507,7 @@ exports.searchUsersByEmail = async (req, res, next) => {
 
     return res.json({
       success: true,
-      message: 'User berhasil ditemukan',
+      message: "User berhasil ditemukan",
       data: {
         _id: user._id,
         name: user.name,
@@ -516,10 +516,10 @@ exports.searchUsersByEmail = async (req, res, next) => {
       },
     });
   } catch (err) {
-    console.error('Search Users By Email Error:', err);
+    console.error("Search Users By Email Error:", err);
     return res.status(500).json({
       success: false,
-      message: err.message || 'Terjadi kesalahan saat mencari user',
+      message: err.message || "Terjadi kesalahan saat mencari user",
       data: null,
     });
   }
@@ -656,37 +656,48 @@ exports.validateUserRole = async (req, res) => {
     // Find and update user
     const user = await User.findByIdAndUpdate(
       userId,
-      { 
+      {
         roleApproved: true,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
-      { 
-        new: true, 
-        runValidators: true 
+      {
+        new: true,
+        runValidators: true,
       }
-    ).select('-passwordHash -resetToken -resetTokenExpires -verifyToken -verifyTokenExpires');
+    ).select(
+      "-passwordHash -resetToken -resetTokenExpires -verifyToken -verifyTokenExpires"
+    );
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Pengguna tidak ditemukan',
-        data: null
+        message: "Pengguna tidak ditemukan",
+        data: null,
       });
+    }
+
+    // Send email notification to user about role approval
+    try {
+      const mailService = require("../services/mailService");
+      await mailService.sendRoleApprovalEmail(user.email, user.name, user.role);
+      console.log(`✅ Role approval email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error("❌ Failed to send role approval email:", emailError);
+      // Don't fail the request if email fails - approval still succeeded
     }
 
     res.json({
       success: true,
       message: `Role ${user.role} untuk ${user.name} berhasil divalidasi`,
-      data: user
+      data: user,
     });
-
   } catch (error) {
-    console.error('Validate User Role Error:', error);
+    console.error("Validate User Role Error:", error);
     res.status(500).json({
       success: false,
-      message: 'Gagal memvalidasi role pengguna',
+      message: "Gagal memvalidasi role pengguna",
       error: error.message,
-      data: null
+      data: null,
     });
   }
 };
@@ -700,7 +711,7 @@ exports.createUser = async (req, res) => {
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Nama, email, dan password harus diisi'
+        message: "Nama, email, dan password harus diisi",
       });
     }
 
@@ -709,12 +720,12 @@ exports.createUser = async (req, res) => {
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: 'Email sudah terdaftar'
+        message: "Email sudah terdaftar",
       });
     }
 
     // Hash password
-    const bcrypt = require('bcrypt');
+    const bcrypt = require("bcrypt");
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Create user
@@ -722,7 +733,7 @@ exports.createUser = async (req, res) => {
       name,
       email,
       passwordHash,
-      role: role || 'mahasiswa',
+      role: role || "mahasiswa",
       isVerified: isVerified || false,
       roleApproved: roleApproved || false,
     });
@@ -739,16 +750,15 @@ exports.createUser = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Pengguna berhasil dibuat',
-      data: userData
+      message: "Pengguna berhasil dibuat",
+      data: userData,
     });
-
   } catch (error) {
-    console.error('Create User Error:', error);
+    console.error("Create User Error:", error);
     res.status(500).json({
       success: false,
-      message: 'Gagal membuat pengguna',
-      error: error.message
+      message: "Gagal membuat pengguna",
+      error: error.message,
     });
   }
 };

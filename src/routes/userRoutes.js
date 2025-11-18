@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
 const { authMiddleware } = require("../middlewares/authMiddleware");
+const { requireRole } = require("../middlewares/roleMiddleware");
 const {
   validateCompetency,
   validateCompetencies,
@@ -16,15 +17,35 @@ router.get("/", authMiddleware, userController.getUsers);
 // Export users route
 router.get("/export", authMiddleware, userController.exportUsers);
 
-// Admin: Create new user
-router.post("/", authMiddleware, userController.createUser);
+// Admin: Create new user (Admin only)
+router.post(
+  "/",
+  authMiddleware,
+  requireRole("admin"),
+  userController.createUser
+);
 
 // Validate user role (Admin only)
-router.patch('/:userId/validate-role', authMiddleware, userController.validateUserRole);
+router.patch(
+  "/:userId/validate-role",
+  authMiddleware,
+  requireRole("admin"),
+  userController.validateUserRole
+);
 
-// Admin: Update and delete user
-router.put("/:userId", authMiddleware, userController.updateUser);
-router.delete("/:userId", authMiddleware, userController.deleteUser);
+// Admin: Update and delete user (Admin only)
+router.put(
+  "/:userId",
+  authMiddleware,
+  requireRole("admin"),
+  userController.updateUser
+);
+router.delete(
+  "/:userId",
+  authMiddleware,
+  requireRole("admin"),
+  userController.deleteUser
+);
 
 // Profile routes
 router.get("/profile", authMiddleware, userController.getMyProfile);
