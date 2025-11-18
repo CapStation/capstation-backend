@@ -8,12 +8,12 @@ const {
     updateAnnouncement,
     deleteAnnouncement 
 } = require('../controllers/announcementController');
-const { authMiddleware } = require('../middlewares/authMiddleware');
+const { authMiddleware, requireRole } = require('../middlewares/authMiddleware');
 
-router.post('/', authMiddleware, createAnnouncement); //create
+router.post('/', authMiddleware, requireRole('admin', 'dosen'), createAnnouncement); //create
 router.get('/', getAnnouncements); //read all
 router.get('/:id', getAnnouncementById); //read one
-router.put('/:id', authMiddleware, updateAnnouncement); //update
-router.delete('/:id', authMiddleware, deleteAnnouncement); //delete
+router.put('/:id', authMiddleware, requireRole('admin', 'dosen'), updateAnnouncement); //update
+router.delete('/:id', authMiddleware, requireRole('admin', 'dosen'), deleteAnnouncement); //delete
 
-module.exports = router;
+module.exports = router;
