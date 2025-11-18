@@ -831,7 +831,7 @@ class GroupController {
         });
       }
 
-      const group = await Group.findById(groupId);
+      const group = await Group.findById(groupId).populate('projects');
       if (!group) {
         return res.status(404).json({
           success: false,
@@ -840,10 +840,23 @@ class GroupController {
         });
       }
 
-      if (group.owner.toString() !== userId.toString()) {
+      // Check if user is owner or admin
+      const isOwner = group.owner.toString() === userId.toString();
+      const isAdmin = req.user?.role === 'admin';
+
+      if (!isOwner && !isAdmin) {
         return res.status(403).json({
           success: false,
-          message: "Hanya owner yang bisa menghapus grup",
+          message: "Hanya owner atau admin yang bisa menghapus grup",
+          data: null,
+        });
+      }
+
+      // Validasi: Cek apakah ada project terhubung
+      if (group.projects && group.projects.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Tidak dapat menghapus grup karena masih ada project yang terhubung. Hapus atau selesaikan project terlebih dahulu.",
           data: null,
         });
       }
