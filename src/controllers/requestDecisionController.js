@@ -275,10 +275,17 @@ exports.createRequest = async (req, res, next) => {
     console.log('Creating new project for group:', groupId);
     console.log('Group details:', myGroup);
     
+    // Normalize tema to dash format for validation
+    const { convertToDash } = require('../configs/themes');
+    const normalizedTema = convertToDash(cap.tema);
+    
+    console.log('Original tema:', cap.tema);
+    console.log('Normalized tema:', normalizedTema);
+    
     const newProject = await Project.create({
       title: cap.title,
       description: cap.description || `Melanjutkan capstone: ${cap.title}`,
-      tema: cap.tema,
+      tema: normalizedTema,
       owner: myGroup.owner, // Set owner dari group owner
       group: groupId,
       supervisor: cap.supervisor,
