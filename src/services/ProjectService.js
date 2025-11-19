@@ -26,6 +26,13 @@ class ProjectService {
         throw new Error('Owner tidak ditemukan');
       }
 
+      // Normalize tema to dash format for validation
+      const { convertToDash } = require('../configs/themes');
+      if (projectData.tema) {
+        projectData.tema = convertToDash(projectData.tema);
+        console.log('Normalized tema:', projectData.tema);
+      }
+
       // Ensure members array includes the owner
       const members = projectData.members || [ownerId];
       if (!members.includes(ownerId)) {
@@ -458,6 +465,13 @@ class ProjectService {
       // Update project - only update allowed fields
       const allowedFields = ['title', 'description', 'tema', 'status', 'capstoneStatus', 
                              'academicYear', 'supervisor', 'tags'];
+      
+      // Normalize tema if being updated
+      const { convertToDash } = require('../configs/themes');
+      if (updateData.tema) {
+        updateData.tema = convertToDash(updateData.tema);
+        console.log('Normalized tema for update:', updateData.tema);
+      }
       
       allowedFields.forEach(field => {
         if (updateData.hasOwnProperty(field) && updateData[field] !== undefined) {
