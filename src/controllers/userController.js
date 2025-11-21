@@ -83,8 +83,11 @@ exports.getUsers = async (req, res, next) => {
       filter.role = role;
     }
 
+    // Include pendingRole in selection for OAuth users
     const users = await User.find(filter)
-      .select("name email role isVerified roleApproved createdAt updatedAt")
+      .select(
+        "name email role pendingRole isVerified roleApproved createdAt updatedAt"
+      )
       .sort({ name: 1 });
 
     res.json({
@@ -653,20 +656,8 @@ exports.validateUserRole = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Find and update user
-    const user = await User.findByIdAndUpdate(
-      userId,
-      {
-        roleApproved: true,
-        updatedAt: new Date(),
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    ).select(
-      "-passwordHash -resetToken -resetTokenExpires -verifyToken -verifyTokenExpires"
-    );
+    // Find user first to check if they have pendingRole
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -676,11 +667,45 @@ exports.validateUserRole = async (req, res) => {
       });
     }
 
+    // BUG FIX: Handle OAuth users with pendingRole
+    // If user has pendingRole (OAuth registration), move it to role field
+    const updateData = {
+      roleApproved: true,
+      updatedAt: new Date(),
+    };
+
+    if (user.pendingRole && !user.role) {
+      // OAuth user - move pendingRole to role
+      updateData.role = user.pendingRole;
+      updateData.pendingRole = null;
+      console.log(
+        `📝 Moving pendingRole "${user.pendingRole}" to role for user ${user.email}`
+      );
+    } else if (!user.role) {
+      return res.status(400).json({
+        success: false,
+        message: "User tidak memiliki role atau pendingRole untuk divalidasi",
+        data: null,
+      });
+    }
+
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+      runValidators: true,
+    }).select(
+      "-passwordHash -resetToken -resetTokenExpires -verifyToken -verifyTokenExpires"
+    );
+
     // Send email notification to user about role approval
     try {
       const mailService = require("../services/mailService");
-      await mailService.sendRoleApprovalEmail(user.email, user.name, user.role);
-      console.log(`✅ Role approval email sent to ${user.email}`);
+      await mailService.sendRoleApprovalEmail(
+        updatedUser.email,
+        updatedUser.name,
+        updatedUser.role
+      );
+      console.log(`✅ Role approval email sent to ${updatedUser.email}`);
     } catch (emailError) {
       console.error("❌ Failed to send role approval email:", emailError);
       // Don't fail the request if email fails - approval still succeeded
@@ -688,8 +713,8 @@ exports.validateUserRole = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Role ${user.role} untuk ${user.name} berhasil divalidasi`,
-      data: user,
+      message: `Role ${updatedUser.role} untuk ${updatedUser.name} berhasil divalidasi`,
+      data: updatedUser,
     });
   } catch (error) {
     console.error("Validate User Role Error:", error);

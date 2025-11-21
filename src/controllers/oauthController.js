@@ -40,6 +40,29 @@ exports.completeOauthProfile = async (req, res, next) => {
     const user = await User.findById(payload.sub);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // BUG FIX #3: If user already has approved role, return success with redirect to dashboard
+    if (user.role && user.roleApproved) {
+      return res.status(200).json({
+        message: "User sudah memiliki role yang disetujui",
+        code: "ALREADY_APPROVED",
+        role: user.role,
+        shouldRedirect: true,
+        redirectTo: "/dashboard",
+      });
+    }
+
+    // BUG FIX #2: If user has pending role awaiting approval, inform them
+    if (user.pendingRole && !user.roleApproved) {
+      return res.status(200).json({
+        message: `Role ${user.pendingRole} sedang menunggu persetujuan admin`,
+        code: "PENDING_APPROVAL",
+        pendingRole: user.pendingRole,
+        isPending: true,
+        shouldRedirect: true,
+        redirectTo: "/account-pending?reason=role_approval",
+      });
+    }
+
     // BUG FIX: Prevent role re-selection
     // Only check if user has ACTUALLY selected a role (not default/null values)
     const hasSelectedRole = user.role !== null && user.role !== undefined;
