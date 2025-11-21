@@ -674,10 +674,14 @@ exports.validateUserRole = async (req, res) => {
       updatedAt: new Date(),
     };
 
+    // BUG FIX #2: Capture the role BEFORE update for correct toast message
+    let finalRole = user.role;
+
     if (user.pendingRole && !user.role) {
       // OAuth user - move pendingRole to role
       updateData.role = user.pendingRole;
       updateData.pendingRole = null;
+      finalRole = user.pendingRole; // Capture for message
       console.log(
         `📝 Moving pendingRole "${user.pendingRole}" to role for user ${user.email}`
       );
@@ -703,7 +707,7 @@ exports.validateUserRole = async (req, res) => {
       await mailService.sendRoleApprovalEmail(
         updatedUser.email,
         updatedUser.name,
-        updatedUser.role
+        finalRole // Use captured role, not updatedUser.role
       );
       console.log(`✅ Role approval email sent to ${updatedUser.email}`);
     } catch (emailError) {
@@ -713,7 +717,7 @@ exports.validateUserRole = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Role ${updatedUser.role} untuk ${updatedUser.name} berhasil divalidasi`,
+      message: `Role ${finalRole} untuk ${updatedUser.name} berhasil divalidasi`,
       data: updatedUser,
     });
   } catch (error) {
