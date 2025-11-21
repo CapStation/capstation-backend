@@ -74,59 +74,36 @@ exports.completeOauthProfile = async (req, res, next) => {
       });
     }
 
+    // OAUTH POLICY: All OAuth users (Mahasiswa & Dosen) require admin approval
+    // No auto-approval for OAuth registration
     if (role === "dosen") {
-      if (allowedDomains.includes(emailDomain)) {
-        user.role = "dosen";
-        user.roleApproved = true;
-      } else {
-        user.pendingRole = "dosen";
-        user.roleApproved = false;
-        await user.save();
-        return res.json({
-          message: "Dosen requested — pending admin approval",
-          isPending: true,
-        });
-      }
-    }
+      user.pendingRole = "dosen";
+      user.roleApproved = false;
+      user.isVerified = true; // Email verified by Google
+      await user.save();
 
-    if (role === "mahasiswa") {
-      user.role = "mahasiswa";
-      user.roleApproved = true;
-    }
-
-    user.pendingRole = null;
-    user.isVerified = true;
-    await user.save();
-
-    // BUG FIX: Only return accessToken if role is approved
-    // For pending roles, don't auto-login
-    if (!user.roleApproved) {
       return res.json({
-        message: "Role menunggu persetujuan admin",
+        message: "Role Dosen sedang menunggu persetujuan admin",
         isPending: true,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          isVerified: user.isVerified,
-          roleApproved: user.roleApproved,
-        },
       });
     }
 
-    const accessToken = generateToken(user);
-    return res.json({
-      accessToken,
-      isPending: false,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isVerified: user.isVerified,
-        roleApproved: user.roleApproved,
-      },
+    if (role === "mahasiswa") {
+      user.pendingRole = "mahasiswa";
+      user.roleApproved = false;
+      user.isVerified = true; // Email verified by Google
+      await user.save();
+
+      return res.json({
+        message: "Role Mahasiswa sedang menunggu persetujuan admin",
+        isPending: true,
+      });
+    }
+
+    // If role not recognized
+    return res.status(400).json({
+      message: "Invalid role selected",
+      code: "INVALID_ROLE",
     });
   } catch (err) {
     return next(err);

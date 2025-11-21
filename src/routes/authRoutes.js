@@ -65,8 +65,32 @@ router.get(
     failureRedirect: "/auth/google/failure",
   }),
   async (req, res) => {
-    const setupToken = generateSetupToken(req.user);
     const frontend = process.env.FRONTEND_URL || "http://localhost:3000";
+    const user = req.user;
+
+    // BUG FIX: Check if user already has a role assigned
+    // If yes, skip oauth-setup and login directly
+    if (user.role && user.roleApproved) {
+      // User already has validated role - generate access token
+      const { generateToken } = require("../middlewares/authMiddleware");
+      const accessToken = generateToken(user);
+
+      // Redirect to frontend with token for auto-login
+      const redirect = `${frontend}/oauth-callback?token=${encodeURIComponent(
+        accessToken
+      )}`;
+      return res.redirect(redirect);
+    }
+
+    // User needs to select role or is pending approval
+    if (user.pendingRole && !user.roleApproved) {
+      // User has pending role waiting for admin approval
+      const redirect = `${frontend}/account-pending?reason=role_approval`;
+      return res.redirect(redirect);
+    }
+
+    // User needs to select role - generate setup token
+    const setupToken = generateSetupToken(user);
     const redirect = `${frontend}/oauth-setup?token=${encodeURIComponent(
       setupToken
     )}`;
