@@ -16,6 +16,15 @@ exports.completeOauthProfile = async (req, res, next) => {
     const user = await User.findById(payload.sub);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // BUG FIX: Prevent role re-selection
+    if (user.role || user.pendingRole) {
+      return res.status(400).json({
+        message: "Role sudah dipilih sebelumnya",
+        code: "ROLE_ALREADY_SELECTED",
+        currentRole: user.role || user.pendingRole,
+      });
+    }
+
     const { role } = req.body;
     if (!role) return res.status(400).json({ message: "role required" });
 
@@ -30,7 +39,10 @@ exports.completeOauthProfile = async (req, res, next) => {
       user.pendingRole = "admin";
       user.roleApproved = false;
       await user.save();
-      return res.json({ message: "Admin requested — pending approval" });
+      return res.json({
+        message: "Admin requested — pending approval",
+        isPending: true,
+      });
     }
 
     if (role === "dosen") {
@@ -43,6 +55,7 @@ exports.completeOauthProfile = async (req, res, next) => {
         await user.save();
         return res.json({
           message: "Dosen requested — pending admin approval",
+          isPending: true,
         });
       }
     }
@@ -56,9 +69,27 @@ exports.completeOauthProfile = async (req, res, next) => {
     user.isVerified = true;
     await user.save();
 
+    // BUG FIX: Only return accessToken if role is approved
+    // For pending roles, don't auto-login
+    if (!user.roleApproved) {
+      return res.json({
+        message: "Role menunggu persetujuan admin",
+        isPending: true,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          isVerified: user.isVerified,
+          roleApproved: user.roleApproved,
+        },
+      });
+    }
+
     const accessToken = generateToken(user);
     return res.json({
       accessToken,
+      isPending: false,
       user: {
         id: user._id,
         name: user.name,
